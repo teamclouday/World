@@ -6,6 +6,13 @@ IF NOT EXIST build (
     ECHO Creating "build" folder
     MKDIR build
 )
+IF NOT EXIST external/external.zip (
+    git pull origin master
+)
+IF NOT EXIST external/glfw (
+    ECHO Extracting external.zip
+    powershell Expand-Archive -Force external/external.zip external/
+)
 CD build
 ECHO Running Cmake File
 ECHO Current Build Type is %buildtype%
