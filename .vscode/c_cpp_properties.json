@@ -5,6 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/external/glfw/include",
+                "${workspaceFolder}/external/glm/include",
                 "${VK_SDK_PATH}/Include"
             ],
             "defines": [

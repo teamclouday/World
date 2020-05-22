@@ -21,5 +21,13 @@ ECHO Cmake File Generated
 ECHO Building
 cmake --build .
 CD ..
+ECHO Compiling All Shaders
+CD shaders
+FOR /D %d IN (*) DO (
+    CD %d
+    CALL compile.bat
+    CD ..
+)
+CD ..
 ECHO Project Successfully Built
 PAUSE
