@@ -43,6 +43,9 @@
         "ctime": "cpp",
         "fstream": "cpp",
         "ratio": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "set": "cpp",
+        "xtree": "cpp",
+        "algorithm": "cpp"
     }
 }
