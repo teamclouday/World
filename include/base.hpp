@@ -25,9 +25,33 @@ namespace BASE
         // create Vulkan basic instance
         void createInstance();
 
+
+
+
+        // check instance extensions
+        void checkInstanceExtensions(std::vector<const char*> requiredExtensions);
+        // check instance layers
+        void checkInstanceLayers(std::vector<const char*> requiredLayers);
+        // fill in debug messenger struct object
+        void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
+        // set debug messenger
+        void setDebugMessenger();
+
+    public:
+        const std::vector<const char*> d_validation_layers = {
+            "VK_LAYER_KHRONOS_validation" // khronos validation layer
+        };
+        const std::vector<const char*> d_device_extensions = {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME // swapchain extension
+        };
+
     private:
+        // GLFW related variables
         GLFWwindow* p_window;
 
+        // Vulkan variables
+        VkInstance d_instance;
+        VkDebugUtilsMessengerEXT d_debug_messenger;
     };
 
     // a GLFW key callback function
@@ -39,4 +63,26 @@ namespace BASE
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
     }
+
+    // Vulkan debug messenger callback function
+    VKAPI_ATTR VkBool32 VKAPI_CALL debug_messenger_callback(
+	    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+	    VkDebugUtilsMessageTypeFlagsEXT messageType,
+	    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+	    void* pUserData
+    );
+    // create debug messenger helper function
+    VkResult CreateDebugUtilsMessengerEXT(
+	    VkInstance instance,
+	    const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+	    const VkAllocationCallbacks* pAllocator,
+	    VkDebugUtilsMessengerEXT* pDebugMessenger
+    );
+    // destroy debug messenger helper function
+    void DestroyDebugUtilsMessengerEXT(
+	    VkInstance instance,
+	    VkDebugUtilsMessengerEXT debugMessenger,
+	    const VkAllocationCallbacks* pAllocator
+    );
+
 }
