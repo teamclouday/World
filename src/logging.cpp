@@ -49,12 +49,17 @@ void Logger::DumpToFile(std::string& filePath)
     write_to_file(filePath, data.str());
 }
 
+// TODO: store tmp local log before poping
 void Logger::AddMessage(LogOwners owner, std::string message, bool print)
 {
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     char buf[100] = {0};
     std::strftime(buf, sizeof(buf), "%H:%M:%S", std::localtime(&now));
     Message newMessage = {owner, message, std::string(buf)};
+    while(d_messages.size() >= MAX_SIZE)
+    {
+        d_messages.pop_front();
+    }
     d_messages.push_back(newMessage);
     if(print)
     {

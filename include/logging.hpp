@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <vector>
+#include <deque>
 #include <string>
 
 namespace LOGGING
@@ -47,7 +47,8 @@ namespace LOGGING
         std::string convertMessage(Message& message);
 
     private:
-        std::vector<Message> d_messages;
+        const uint32_t MAX_SIZE = 2000u;
+        std::deque<Message> d_messages;
 
     };
 }
