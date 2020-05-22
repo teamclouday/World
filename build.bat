@@ -23,8 +23,8 @@ cmake --build .
 CD ..
 ECHO Compiling All Shaders
 CD shaders
-FOR /D %d IN (*) DO (
-    CD %d
+FOR /D %%d IN (*) DO (
+    CD %%d
     CALL compile.bat
     CD ..
 )
