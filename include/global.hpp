@@ -36,6 +36,7 @@ public:
     int WINDOW_HEIGHT = 600;
     std::string WINDOW_TITLE = "Hello World";
     bool WINDOW_RESIZABLE = false;
+    bool BACKEND_ENABLE_VALIDATION = true;
 
     // parameters for logger
     std::string LOGGER_PATH = "world.log";
