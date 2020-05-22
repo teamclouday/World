@@ -13,6 +13,7 @@ namespace LOGGING
     {
         LOG_OWNERS_LOGGING = 0,
         LOG_OWNERS_BACKEND = 1,
+        LOG_OWNERS_USER    = 2,
     };
 
     // structure for each message
