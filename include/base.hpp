@@ -19,6 +19,7 @@
 #include <glm/glm.hpp>
 
 #include <vector>
+#include <string>
 #include <array>
 
 namespace BASE
@@ -55,7 +56,20 @@ namespace BASE
 
         static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
         {
-            
+            std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+            attributeDescriptions[0].binding = 0;
+            attributeDescriptions[0].location = 0;
+            attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+            attributeDescriptions[0].offset = offsetof(VulkanVertex, pos);
+            attributeDescriptions[1].binding = 0;
+            attributeDescriptions[1].location = 1;
+            attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+            attributeDescriptions[1].offset = offsetof(VulkanVertex, color);
+            attributeDescriptions[2].binding = 0;
+            attributeDescriptions[2].location = 2;
+            attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+            attributeDescriptions[2].offset = offsetof(VulkanVertex, texCoord);
+            return attributeDescriptions;
         }
     };
 
@@ -135,8 +149,12 @@ namespace BASE
         void createSwapChain();
         // create render pass
         void createRenderPass();
+        // create descriptor set layout
+        void createDescriptorSetLayout();
         // create pipeline
         void createGraphicsPipeline();
+        // create command pool
+        void createCommandPool();
 
         
         // select swap chain surface format from options
@@ -162,12 +180,20 @@ namespace BASE
         std::vector<VkImageView> d_swap_chain_image_views;
         VkFormat d_swap_chain_image_format;
         VkExtent2D d_swap_chain_image_extent;
+
         VkRenderPass d_render_pass;
+
+        VkDescriptorSetLayout d_descriptor_set_layout;
+
+        VkPipeline d_pipeline;
+        VkPipelineLayout d_pipeline_layout;
+
+        VkCommandPool d_command_pool;
 
     };
 
     // a GLFW key callback function
-    // TODO: May add support for user-defined key-bindings
+    // TODO: add support for user-defined key-bindings
     static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
     {
         if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)

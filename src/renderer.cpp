@@ -19,11 +19,16 @@ Renderer::Renderer()
         throw std::runtime_error("ERROR: backend not initialized when using renderer!");
     createSwapChain();
     createRenderPass();
+    createDescriptorSetLayout();
+    createGraphicsPipeline();
 }
 
 void Renderer::refresh()
 {
     destroySwapChain();
+
+    
+
 
 }
 
@@ -34,6 +39,10 @@ void Renderer::drawFrame()
 
 Renderer::~Renderer()
 {
+    destroySwapChain();
+
+    vkDestroyDescriptorSetLayout(p_backend->d_device, d_descriptor_set_layout, nullptr);
+
     p_backend = nullptr;
 }
 
@@ -162,6 +171,37 @@ void Renderer::createRenderPass()
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan render pass created");}
 }
 
+void Renderer::createDescriptorSetLayout()
+{
+    LOGGING::Logger* myLogger = app->GetLogger();
+    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
+
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	uboLayoutBinding.pImmutableSamplers = nullptr;
+
+	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+	samplerLayoutBinding.binding = 1;
+	samplerLayoutBinding.descriptorCount = 1;
+	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerLayoutBinding.pImmutableSamplers = nullptr;
+	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
+
+	if (vkCreateDescriptorSetLayout(p_backend->d_device, &layoutInfo, nullptr, &d_descriptor_set_layout) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to create vulkan descriptor set layout!");
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan descriptor set layout created");}
+}
+
 void Renderer::createGraphicsPipeline()
 {
     LOGGING::Logger* myLogger = app->GetLogger();
@@ -173,12 +213,14 @@ void Renderer::createGraphicsPipeline()
     std::string path = app->SHADER_SOURCE_PATH + "/";
 
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+    std::vector<VkShaderModule> shaderModules;
     shaderStages.resize(0);
 
     for(size_t i = 0; i < shaderSourceDetails.names.size(); i++)
     {
         auto shaderCode = FILES::read_bytes_from_file(path + shaderSourceDetails.names[0]);
         VkShaderModule shaderModule = createShaderModule(shaderCode, shaderSourceDetails.names[0]);
+        shaderModules.push_back(shaderModule);
 
         VkPipelineShaderStageCreateInfo stageInfo{};
         stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -212,8 +254,142 @@ void Renderer::createGraphicsPipeline()
         if(myLogger){myLogger->AddMessage(myLoggerOwner, "shader file " + shaderSourceDetails.names[i] + " loaded");}
     }
 
+    auto bindingDescription = VulkanVertex::getBindingDescription();
+    auto attributeDescriptions = VulkanVertex::getAttributeDescriptions();
 
-    
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = (float)d_swap_chain_image_extent.width;
+	viewport.height = (float)d_swap_chain_image_extent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+	scissor.offset = { 0, 0 };
+	scissor.extent = d_swap_chain_image_extent;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = 1.0f;
+	multisampling.pSampleMask = nullptr;
+	multisampling.alphaToCoverageEnable = VK_FALSE;
+	multisampling.alphaToOneEnable = VK_FALSE;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachment.blendEnable = VK_FALSE;
+	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.logicOpEnable = VK_FALSE;
+	colorBlending.logicOp = VK_LOGIC_OP_COPY;
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlendAttachment;
+	colorBlending.blendConstants[0] = 0.0f;
+	colorBlending.blendConstants[1] = 0.0f;
+	colorBlending.blendConstants[2] = 0.0f;
+	colorBlending.blendConstants[3] = 0.0f;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencil.depthTestEnable = VK_TRUE;
+	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.minDepthBounds = 0.0f;
+	depthStencil.maxDepthBounds = 1.0f;
+	depthStencil.stencilTestEnable = VK_FALSE;
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &d_descriptor_set_layout;
+	pipelineLayoutInfo.pushConstantRangeCount = 0;
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+    if (vkCreatePipelineLayout(p_backend->d_device, &pipelineLayoutInfo, nullptr, &d_pipeline_layout) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to create Vulkan pipeline layout!");
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan pipeline layout created");}
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+	pipelineInfo.pStages = shaderStages.data();
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = &depthStencil;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = nullptr;
+	pipelineInfo.layout = d_pipeline_layout;
+	pipelineInfo.renderPass = d_render_pass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
+
+    if (vkCreateGraphicsPipelines(p_backend->d_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &d_pipeline) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to create Vulkan graphics pipeline!");
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan pipeline created");}
+
+    for(size_t i = 0; i < shaderModules.size(); i++)
+        vkDestroyShaderModule(p_backend->d_device, shaderModules[i], nullptr);
+}
+
+void Renderer::createCommandPool()
+{
+    LOGGING::Logger* myLogger = app->GetLogger();
+    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
+
+    VulkanQueueFamilyIndices queueFamilyIndices = p_backend->getQueueFamilies(p_backend->d_physical_device);
+
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamilyID;
+	poolInfo.flags = 0;
+
+	if (vkCreateCommandPool(p_backend->d_device, &poolInfo, nullptr, &d_command_pool) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to create Vulkan command pool!");
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan command pool created");}
 }
 
 
@@ -301,6 +477,8 @@ void Renderer::destroySwapChain()
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
 
+    vkDestroyPipeline(p_backend->d_device, d_pipeline, nullptr);
+    vkDestroyPipelineLayout(p_backend->d_device, d_pipeline_layout, nullptr);
     vkDestroyRenderPass(p_backend->d_device, d_render_pass, nullptr);
 
     for(size_t i = 0; i < d_swap_chain_image_views.size(); i++)
