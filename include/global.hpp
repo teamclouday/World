@@ -6,6 +6,9 @@
 #include "base.hpp"
 #include "logging.hpp"
 
+#define APP_EXIT_SUCCESS    0
+#define APP_EXIT_FAILURE    1
+
 class Application
 {
 public:
