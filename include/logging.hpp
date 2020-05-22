@@ -30,7 +30,7 @@ namespace LOGGING
         Logger();
         ~Logger();
         // add a new message
-        void AddMessage(LogOwners owner, std::string message);
+        void AddMessage(LogOwners owner, std::string message, bool print=false);
         // print all messages to console
         void PrintAll();
         // print messages by owner ID

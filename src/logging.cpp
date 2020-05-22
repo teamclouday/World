@@ -49,13 +49,17 @@ void Logger::DumpToFile(std::string& filePath)
     write_to_file(filePath, data.str());
 }
 
-void Logger::AddMessage(LogOwners owner, std::string message)
+void Logger::AddMessage(LogOwners owner, std::string message, bool print)
 {
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     char buf[100] = {0};
     std::strftime(buf, sizeof(buf), "%H:%M:%S", std::localtime(&now));
     Message newMessage = {owner, message, std::string(buf)};
     d_messages.push_back(newMessage);
+    if(print)
+    {
+        std::cout << message << std::endl;
+    }
 }
 
 std::string Logger::convertMessage(Message& message)
