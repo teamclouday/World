@@ -73,6 +73,9 @@ std::string Logger::convertMessage(Message& message)
     case LOG_OWNERS_BACKEND:
         owner = "backend";
         break;
+    case LOG_OWNERS_RENDERER:
+        owner = "renderer";
+        break;
     case LOG_OWNERS_USER:
         owner = "user";
         break;

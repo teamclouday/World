@@ -11,9 +11,10 @@ namespace LOGGING
     // set id for each message owner
     enum LogOwners
     {
-        LOG_OWNERS_LOGGING = 0,
-        LOG_OWNERS_BACKEND = 1,
-        LOG_OWNERS_USER    = 2,
+        LOG_OWNERS_LOGGING  = 0,
+        LOG_OWNERS_BACKEND  = 1,
+        LOG_OWNERS_RENDERER = 2,
+        LOG_OWNERS_USER     = 3,
     };
 
     // structure for each message
