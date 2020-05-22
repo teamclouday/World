@@ -34,7 +34,7 @@ namespace FILES
     static std::string read_string_from_file(std::string& filePath)
     {
         std::string path = std::string(GLOB_FILE_FOLDER) + "/" + filePath;
-        std::ifstream inFile(path.c_str(), std::ios::in);
+        std::ifstream inFile(path.c_str(), std::ios::binary);
         if(!inFile.is_open())
         {
             std::string message = "failed to open file for reading: " + path;
@@ -54,7 +54,7 @@ namespace FILES
     static std::vector<char> read_bytes_from_file(std::string& filePath)
     {
         std::string path = std::string(GLOB_FILE_FOLDER) + "/" + filePath;
-        std::ifstream inFile(path.c_str(), std::ios::in | std::ios::binary);
+        std::ifstream inFile(path.c_str(), std::ios::ate | std::ios::binary);
         if(!inFile.is_open())
         {
             std::string message = "failed to open file for reading: " + path;

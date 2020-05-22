@@ -218,8 +218,8 @@ void Renderer::createGraphicsPipeline()
 
     for(size_t i = 0; i < shaderSourceDetails.names.size(); i++)
     {
-        auto shaderCode = FILES::read_bytes_from_file(path + shaderSourceDetails.names[0]);
-        VkShaderModule shaderModule = createShaderModule(shaderCode, shaderSourceDetails.names[0]);
+        auto shaderCode = FILES::read_bytes_from_file(path + shaderSourceDetails.names[i]);
+        VkShaderModule shaderModule = createShaderModule(shaderCode, shaderSourceDetails.names[i]);
         shaderModules.push_back(shaderModule);
 
         VkPipelineShaderStageCreateInfo stageInfo{};
