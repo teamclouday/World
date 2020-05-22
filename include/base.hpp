@@ -15,6 +15,21 @@
 
 namespace BASE
 {
+    struct VulkanQueueFamilyIndices
+    {
+        uint32_t graphicsFamilyID;
+        bool graphicsInit = false;
+        uint32_t presentFamilyID;
+        bool presentInit = false;
+    };
+
+    struct VulkanSwapChainSupport
+    {
+        VkSurfaceCapabilitiesKHR capabilities;
+        std::vector<VkSurfaceFormatKHR> surfaceFormats;
+        std::vector<VkPresentModeKHR> presentModes;
+    };
+
     class Backend
     {
     public:
@@ -26,18 +41,46 @@ namespace BASE
         void createWindow();
         // create Vulkan basic instance
         void createInstance();
-
-
+        // create Vulkan surface
+        void createSurface();
+        // pick valid physical device
+        void pickPhysicalDevice();
+        // create logical device
+        void createLogicalDevice();
+        // create swap chain
+        void createSwapChain();
+        // create render pass
+        void createRenderPass();
 
 
         // check instance extensions
-        void checkInstanceExtensions(std::vector<const char*> requiredExtensions);
+        void checkInstanceExtensions(const std::vector<const char*> requiredExtensions);
         // check instance layers
-        void checkInstanceLayers(std::vector<const char*> requiredLayers);
+        void checkInstanceLayers(const std::vector<const char*> requiredLayers);
         // fill in debug messenger struct object
         void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
         // set debug messenger
         void setDebugMessenger();
+        // check if physical device is suitable
+        bool isPhysicalDeviceSuitable(VkPhysicalDevice device);
+        // get queue family for physical device
+        VulkanQueueFamilyIndices getQueueFamilies(VkPhysicalDevice device);
+        // check device extensions
+        bool checkDeviceExtensions(VkPhysicalDevice device);
+        // check swap chain support for physical device
+        VulkanSwapChainSupport checkDeviceSwapChainSupport(VkPhysicalDevice device);
+        // select swap chain surface format from options
+        VkSurfaceFormatKHR selectSwapChainSurfaceFormat(const std::vector<VkSurfaceFormatKHR> availableFormats);
+        // select swap chain present mode from options
+        VkPresentModeKHR selectSwapChainPresentMode(const std::vector<VkPresentModeKHR> availableModes);
+        // select swap chain extent
+        VkExtent2D selectSwapChainExtent(VkSurfaceCapabilitiesKHR& capabilities);
+        // create image view from image
+        VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+        // get physical device supported image format
+        VkFormat getDeviceSupportedImageFormat(const std::vector<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+        // destroy swap chain
+        void destroySwapChain();
 
     public:
         const std::vector<const char*> d_validation_layers = {
@@ -53,6 +96,15 @@ namespace BASE
 
         // Vulkan variables
         VkInstance d_instance;
+        VkSurfaceKHR d_surface;
+        VkDevice d_device;
+        VkPhysicalDevice d_physical_device;
+        VkSwapchainKHR d_swap_chain;
+        std::vector<VkImage> d_swap_chain_images;
+        std::vector<VkImageView> d_swap_chain_image_views;
+        VkFormat d_swap_chain_image_format;
+        VkExtent2D d_swap_chain_image_extent;
+        VkRenderPass d_render_pass;
         VkDebugUtilsMessengerEXT d_debug_messenger;
     };
 
