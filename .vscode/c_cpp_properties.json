@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/external/glfw/include",
+                "${VK_SDK_PATH}/Include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.18362.0",
+            "intelliSenseMode": "msvc-x86",
+            "cppStandard": "c++11"
+        }
+    ],
+    "version": 4
+}
