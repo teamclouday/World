@@ -4,10 +4,7 @@
 extern Application* app;
 
 #include <set>
-#include <array>
-#include <cstdint>
 #include <stdexcept>
-#include <algorithm>
 
 VKAPI_ATTR VkBool32 VKAPI_CALL BASE::debug_messenger_callback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -100,13 +97,13 @@ Backend::Backend()
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
-    createSwapChain();
-    createRenderPass();
 }
 
 Backend::~Backend()
 {
-    destroySwapChain();
+    Renderer* myRenderer = app->GetRenderer();
+    if(myRenderer)
+        delete myRenderer;
 
     vkDestroyDevice(d_device, nullptr);
 
@@ -141,6 +138,7 @@ void Backend::createWindow()
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "GLFW window created");}
 
     glfwSetWindowUserPointer(p_window, (void*)this);
+    glfwSetFramebufferSizeCallback(p_window, glfw_frame_resize_callback);
     glfwSetKeyCallback(p_window, glfw_key_callback);
 }
 
@@ -152,10 +150,12 @@ void Backend::createInstance()
     uint32_t glfwExtensionCount;
     const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
     std::vector<const char*> requiredExtensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-    requiredExtensions.insert(requiredExtensions.end(), d_device_extensions.begin(), d_device_extensions.end());
-    checkInstanceExtensions(requiredExtensions);
     if(app->BACKEND_ENABLE_VALIDATION)
+    {
+        requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         checkInstanceLayers(d_validation_layers);
+    }
+    checkInstanceExtensions(requiredExtensions);
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -275,131 +275,6 @@ void Backend::createLogicalDevice()
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan logical device created");}
 }
 
-void Backend::createSwapChain()
-{
-    LOGGING::Logger* myLogger = app->GetLogger();
-    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_BACKEND;
-
-    VulkanSwapChainSupport swapChainSupport = checkDeviceSwapChainSupport(d_physical_device);
-    VkSurfaceFormatKHR surfaceFormat = selectSwapChainSurfaceFormat(swapChainSupport.surfaceFormats);
-    VkPresentModeKHR presentMode = selectSwapChainPresentMode(swapChainSupport.presentModes);
-    VkExtent2D extent = selectSwapChainExtent(swapChainSupport.capabilities);
-
-    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-    if(swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
-        imageCount = swapChainSupport.capabilities.maxImageCount;
-    
-    VkSwapchainCreateInfoKHR createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    createInfo.surface = d_surface;
-    createInfo.minImageCount = imageCount;
-    createInfo.imageFormat = surfaceFormat.format;
-    createInfo.imageColorSpace = surfaceFormat.colorSpace;
-    createInfo.imageExtent = extent;
-    createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    VulkanQueueFamilyIndices indices = getQueueFamilies(d_physical_device);
-    uint32_t queueFamilyIDs[] = {indices.graphicsFamilyID, indices.presentFamilyID};
-    if(indices.graphicsFamilyID != indices.presentFamilyID)
-    {
-        createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        createInfo.queueFamilyIndexCount = 2;
-        createInfo.pQueueFamilyIndices = queueFamilyIDs;
-    }
-    else
-    {
-        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        createInfo.queueFamilyIndexCount = 0;
-        createInfo.pQueueFamilyIndices = nullptr;
-    }
-    
-    createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
-    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    createInfo.presentMode = presentMode;
-    createInfo.clipped = VK_TRUE;
-    createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-    if(vkCreateSwapchainKHR(d_device, &createInfo, nullptr, &d_swap_chain) != VK_SUCCESS)
-        throw std::runtime_error("ERROR: failed to create Vulkan swap chain!");
-
-    vkGetSwapchainImagesKHR(d_device,d_swap_chain, &imageCount, nullptr);
-    d_swap_chain_images.resize(imageCount);
-    vkGetSwapchainImagesKHR(d_device,d_swap_chain, &imageCount, d_swap_chain_images.data());
-    d_swap_chain_image_format = surfaceFormat.format;
-    d_swap_chain_image_extent = extent;
-    d_swap_chain_image_views.resize(imageCount);
-    for(size_t i = 0; i < imageCount; i++)
-        d_swap_chain_image_views[i] = createImageView(d_swap_chain_images[i], d_swap_chain_image_format, VK_IMAGE_ASPECT_COLOR_BIT);
-
-    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan swap chain created");}
-}
-
-void Backend::createRenderPass()
-{
-    LOGGING::Logger* myLogger = app->GetLogger();
-    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_BACKEND;
-
-    VkAttachmentDescription colorAttachment{};
-    colorAttachment.format = d_swap_chain_image_format;
-    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentDescription depthAttachment{};
-    depthAttachment.format = getDeviceSupportedImageFormat({VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-                                            VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference colorAttachmentRef{};
-	colorAttachmentRef.attachment = 0;
-	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	VkAttachmentReference depthAttachmentRef{};
-	depthAttachmentRef.attachment = 1;
-	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-	VkSubpassDescription subpass{};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &colorAttachmentRef;
-	subpass.pDepthStencilAttachment = &depthAttachmentRef;
-
-	std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
-
-	VkRenderPassCreateInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-	renderPassInfo.pAttachments = attachments.data();
-	renderPassInfo.subpassCount = 1;
-	renderPassInfo.pSubpasses = &subpass;
-
-	VkSubpassDependency dependency{};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependency.dstSubpass = 0;
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcAccessMask = 0;
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-	renderPassInfo.dependencyCount = 1;
-	renderPassInfo.pDependencies = &dependency;
-
-	if (vkCreateRenderPass(d_device, &renderPassInfo, nullptr, &d_render_pass) != VK_FALSE)
-		throw std::runtime_error("ERROR: failed to create Vulkan render pass!");
-    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan render pass created");}
-}
-
 void Backend::checkInstanceExtensions(const std::vector<const char*> requiredExtensions)
 {
     uint32_t extensionCount;
@@ -501,6 +376,7 @@ VulkanQueueFamilyIndices Backend::getQueueFamilies(VkPhysicalDevice device)
     uint32_t queueFamilyCount;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
     uint32_t i = 0;
     for(const auto& queueFamily : queueFamilies)
@@ -575,68 +451,6 @@ VulkanSwapChainSupport Backend::checkDeviceSwapChainSupport(VkPhysicalDevice dev
     return supportDetails;
 }
 
-VkSurfaceFormatKHR Backend::selectSwapChainSurfaceFormat(const std::vector<VkSurfaceFormatKHR> availableFormats)
-{
-    for(const auto& availableFormat : availableFormats)
-    {
-        if(availableFormat.format == VK_FORMAT_B8G8R8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-            return availableFormat;
-    }
-    return availableFormats[0];
-}
-
-VkPresentModeKHR Backend::selectSwapChainPresentMode(const std::vector<VkPresentModeKHR> availableModes)
-{
-    for(const auto& availableMode : availableModes)
-    {
-        if(availableMode == VK_PRESENT_MODE_MAILBOX_KHR)
-            return availableMode;
-    }
-    return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-VkExtent2D Backend::selectSwapChainExtent(VkSurfaceCapabilitiesKHR& capabilities)
-{
-    if(capabilities.currentExtent.width != UINT32_MAX)
-        return capabilities.currentExtent;
-    else
-    {
-        int width, height;
-        glfwGetFramebufferSize(p_window, &width, &height);
-        VkExtent2D actualExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
-        actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
-        actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
-        return actualExtent;
-    }
-}
-
-VkImageView Backend::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
-{
-    VkImageViewCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    createInfo.image = image;
-    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    createInfo.format = format;
-    createInfo.subresourceRange.aspectMask = aspectFlags;
-    createInfo.subresourceRange.baseMipLevel = 0;
-    createInfo.subresourceRange.levelCount = 1;
-    createInfo.subresourceRange.baseArrayLayer = 0;
-    createInfo.subresourceRange.layerCount = 1;
-    createInfo.components = {
-		VK_COMPONENT_SWIZZLE_IDENTITY,
-		VK_COMPONENT_SWIZZLE_IDENTITY,
-		VK_COMPONENT_SWIZZLE_IDENTITY,
-		VK_COMPONENT_SWIZZLE_IDENTITY,
-	};
-
-    VkImageView imageView;
-    if(vkCreateImageView(d_device, &createInfo, nullptr, &imageView) != VK_SUCCESS)
-    {
-        throw std::runtime_error("ERROR: failed to create Vulkan image view!");
-    }
-    return imageView;
-}
-
 VkFormat Backend::getDeviceSupportedImageFormat(const std::vector<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
 {
     for(VkFormat format : candidates)
@@ -649,15 +463,4 @@ VkFormat Backend::getDeviceSupportedImageFormat(const std::vector<VkFormat> cand
             return format;
     }
     throw std::runtime_error("ERROR: failed to find Vulkan supported image format!");
-}
-
-void Backend::destroySwapChain()
-{
-
-    vkDestroyRenderPass(d_device, d_render_pass, nullptr);
-
-    for(size_t i = 0; i < d_swap_chain_image_views.size(); i++)
-        vkDestroyImageView(d_device, d_swap_chain_image_views[i], nullptr);
-    
-    vkDestroySwapchainKHR(d_device, d_swap_chain, nullptr);
 }

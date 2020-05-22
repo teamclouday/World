@@ -3,6 +3,10 @@
 // 1. window management
 // 2. vulkan instance management
 // 3. handle low level vulkan function calls
+// basic renderer functions
+// 1. manage long term variables (shader module)
+// 2. manage render term variables (pipeline), could be updated by recreating swap chain
+// 3. manage fast changing variables (uniform buffer) also long term var
 
 #pragma once
 
@@ -11,7 +15,11 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+
 #include <vector>
+#include <array>
 
 namespace BASE
 {
@@ -30,8 +38,32 @@ namespace BASE
         std::vector<VkPresentModeKHR> presentModes;
     };
 
+    struct VulkanVertex
+    {
+        glm::vec3 pos;
+        glm::vec3 color;
+        glm::vec2 texCoord;
+
+        static VkVertexInputBindingDescription getBindingDescription()
+        {
+            VkVertexInputBindingDescription bindingDescription{};
+            bindingDescription.binding = 0;
+            bindingDescription.stride = sizeof(VulkanVertex);
+            bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+            return bindingDescription;
+        }
+
+        static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
+        {
+            
+        }
+    };
+
+    class Renderer;
+
     class Backend
     {
+    friend class Renderer;
     public:
         Backend();
         ~Backend();
@@ -47,11 +79,6 @@ namespace BASE
         void pickPhysicalDevice();
         // create logical device
         void createLogicalDevice();
-        // create swap chain
-        void createSwapChain();
-        // create render pass
-        void createRenderPass();
-
 
         // check instance extensions
         void checkInstanceExtensions(const std::vector<const char*> requiredExtensions);
@@ -69,18 +96,8 @@ namespace BASE
         bool checkDeviceExtensions(VkPhysicalDevice device);
         // check swap chain support for physical device
         VulkanSwapChainSupport checkDeviceSwapChainSupport(VkPhysicalDevice device);
-        // select swap chain surface format from options
-        VkSurfaceFormatKHR selectSwapChainSurfaceFormat(const std::vector<VkSurfaceFormatKHR> availableFormats);
-        // select swap chain present mode from options
-        VkPresentModeKHR selectSwapChainPresentMode(const std::vector<VkPresentModeKHR> availableModes);
-        // select swap chain extent
-        VkExtent2D selectSwapChainExtent(VkSurfaceCapabilitiesKHR& capabilities);
-        // create image view from image
-        VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
         // get physical device supported image format
         VkFormat getDeviceSupportedImageFormat(const std::vector<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
-        // destroy swap chain
-        void destroySwapChain();
 
     public:
         const std::vector<const char*> d_validation_layers = {
@@ -89,6 +106,8 @@ namespace BASE
         const std::vector<const char*> d_device_extensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME // swapchain extension
         };
+
+        bool d_frame_refreshed = false;
 
     private:
         // GLFW related variables
@@ -99,13 +118,52 @@ namespace BASE
         VkSurfaceKHR d_surface;
         VkDevice d_device;
         VkPhysicalDevice d_physical_device;
+        VkDebugUtilsMessengerEXT d_debug_messenger;
+    };
+
+    class Renderer
+    {
+    public:
+        Renderer();
+        ~Renderer();
+
+        void drawFrame();
+        void refresh();
+
+    private:
+        // create swap chain
+        void createSwapChain();
+        // create render pass
+        void createRenderPass();
+        // create pipeline
+        void createGraphicsPipeline();
+
+        
+        // select swap chain surface format from options
+        VkSurfaceFormatKHR selectSwapChainSurfaceFormat(const std::vector<VkSurfaceFormatKHR> availableFormats);
+        // select swap chain present mode from options
+        VkPresentModeKHR selectSwapChainPresentMode(const std::vector<VkPresentModeKHR> availableModes);
+        // select swap chain extent
+        VkExtent2D selectSwapChainExtent(VkSurfaceCapabilitiesKHR& capabilities);
+        // create image view from image
+        VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+        // create shader module from source
+        VkShaderModule createShaderModule(const std::vector<char> code, const std::string name);
+        // destroy swap chain
+        void destroySwapChain();
+
+    public:
+
+    private:
+        Backend* p_backend;
+
         VkSwapchainKHR d_swap_chain;
         std::vector<VkImage> d_swap_chain_images;
         std::vector<VkImageView> d_swap_chain_image_views;
         VkFormat d_swap_chain_image_format;
         VkExtent2D d_swap_chain_image_extent;
         VkRenderPass d_render_pass;
-        VkDebugUtilsMessengerEXT d_debug_messenger;
+
     };
 
     // a GLFW key callback function
@@ -116,6 +174,13 @@ namespace BASE
         {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
+    }
+
+    // GLFW frame buffer resize callback
+    static void glfw_frame_resize_callback(GLFWwindow* window, int width, int height)
+    {
+        auto backend = reinterpret_cast<Backend*>(glfwGetWindowUserPointer(window));
+        backend->d_frame_refreshed = true;
     }
 
     // Vulkan debug messenger callback function
