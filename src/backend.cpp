@@ -273,6 +273,9 @@ void Backend::createLogicalDevice()
     if(vkCreateDevice(d_physical_device, &createInfo, nullptr, &d_device) != VK_SUCCESS)
         throw std::runtime_error("ERROR: failed to create Vulkan logical device!");
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan logical device created");}
+
+    vkGetDeviceQueue(d_device, indices.graphicsFamilyID, 0, &d_graphics_queue);
+    vkGetDeviceQueue(d_device, indices.presentFamilyID, 0, &d_present_queue);
 }
 
 void Backend::checkInstanceExtensions(const std::vector<const char*> requiredExtensions)
@@ -463,4 +466,21 @@ VkFormat Backend::getDeviceSupportedImageFormat(const std::vector<VkFormat> cand
             return format;
     }
     throw std::runtime_error("ERROR: failed to find Vulkan supported image format!");
+}
+
+uint32_t Backend::findDeviceMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+    VkPhysicalDeviceMemoryProperties memProperties;
+	vkGetPhysicalDeviceMemoryProperties(d_physical_device, &memProperties);
+
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+	{
+		if ((typeFilter & (1 << i)) &&
+			((memProperties.memoryTypes[i].propertyFlags & properties) == properties))
+		{
+			return i;
+		}
+	}
+
+	throw std::runtime_error("ERROR: failed to find suitable Vulkan device memory type!");
 }

@@ -17,10 +17,13 @@ Renderer::Renderer()
     p_backend = app->GetBackend();
     if(!p_backend)
         throw std::runtime_error("ERROR: backend not initialized when using renderer!");
+    p_graph = DATA::Graph::newGraph(app->GRAPH_MESHES, p_backend->d_device);
+    createCommandPool();
     createSwapChain();
     createRenderPass();
-    createDescriptorSetLayout();
     createGraphicsPipeline();
+    createDepthResources();
+    createFramebuffers();
 }
 
 void Renderer::refresh()
@@ -40,8 +43,6 @@ void Renderer::drawFrame()
 Renderer::~Renderer()
 {
     destroySwapChain();
-
-    vkDestroyDescriptorSetLayout(p_backend->d_device, d_descriptor_set_layout, nullptr);
 
     p_backend = nullptr;
 }
@@ -171,46 +172,15 @@ void Renderer::createRenderPass()
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan render pass created");}
 }
 
-void Renderer::createDescriptorSetLayout()
-{
-    LOGGING::Logger* myLogger = app->GetLogger();
-    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
-
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr;
-
-	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-	samplerLayoutBinding.binding = 1;
-	samplerLayoutBinding.descriptorCount = 1;
-	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBinding.pImmutableSamplers = nullptr;
-	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
-
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
-
-	if (vkCreateDescriptorSetLayout(p_backend->d_device, &layoutInfo, nullptr, &d_descriptor_set_layout) != VK_SUCCESS)
-		throw std::runtime_error("ERROR: failed to create vulkan descriptor set layout!");
-    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan descriptor set layout created");}
-}
-
 void Renderer::createGraphicsPipeline()
 {
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
 
-    UTILS::ShaderSourceDetails shaderSourceDetails = app->SHADER_SOURCE_DETAILS;
+    DATA::ShaderSourceDetails shaderSourceDetails = app->GRAPH_SHADER_DETAILS;
     if(!shaderSourceDetails.validate())
         throw std::runtime_error("ERROR: shader source details are not set properly!");
-    std::string path = app->SHADER_SOURCE_PATH + "/";
+    std::string path = app->GRAPH_SHADER_DETAILS.path + "/";
 
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
     std::vector<VkShaderModule> shaderModules;
@@ -226,22 +196,22 @@ void Renderer::createGraphicsPipeline()
         stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         switch(shaderSourceDetails.types[i])
         {
-            case UTILS::SHADER_VERTEX:
+            case DATA::SHADER_VERTEX:
                 stageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
                 break;
-            case UTILS::SHADER_TESS_CONTROL:
+            case DATA::SHADER_TESS_CONTROL:
                 stageInfo.stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
                 break;
-            case UTILS::SHADER_TESS_EVALUATE:
+            case DATA::SHADER_TESS_EVALUATE:
                 stageInfo.stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
                 break;
-            case UTILS::SHADER_GEOMETRY:
+            case DATA::SHADER_GEOMETRY:
                 stageInfo.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
                 break;
-            case UTILS::SHADER_FRAGMENT:
+            case DATA::SHADER_FRAGMENT:
                 stageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
                 break;
-            case UTILS::SHADER_COMPUTE:
+            case DATA::SHADER_COMPUTE:
                 stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
                 break;
             default:
@@ -254,8 +224,8 @@ void Renderer::createGraphicsPipeline()
         if(myLogger){myLogger->AddMessage(myLoggerOwner, "shader file " + shaderSourceDetails.names[i] + " loaded");}
     }
 
-    auto bindingDescription = VulkanVertex::getBindingDescription();
-    auto attributeDescriptions = VulkanVertex::getAttributeDescriptions();
+    auto bindingDescription = DATA::Vertex::getBindingDescription();
+    auto attributeDescriptions = DATA::Vertex::getAttributeDescriptions();
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -341,7 +311,7 @@ void Renderer::createGraphicsPipeline()
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &d_descriptor_set_layout;
+	pipelineLayoutInfo.pSetLayouts = &p_graph->d_desctiptor_sets.layout;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -392,7 +362,79 @@ void Renderer::createCommandPool()
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan command pool created");}
 }
 
+void Renderer::createDepthResources()
+{
+    LOGGING::Logger* myLogger = app->GetLogger();
+    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
 
+    VkFormat depthFormat = p_backend->getDeviceSupportedImageFormat(
+        {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+        VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
+    );
+    createImage(d_swap_chain_image_extent.width, d_swap_chain_image_extent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        d_depth_image.image, d_depth_image.mem);
+    d_depth_image.view = createImageView(d_depth_image.image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+    transitionImageLayout(d_depth_image.image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    d_depth_image.allset = true;
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan depth resources created");}
+}
+
+void Renderer::createFramebuffers()
+{
+    LOGGING::Logger* myLogger = app->GetLogger();
+    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
+
+    d_swap_chain_framebuffers.resize(d_swap_chain_images.size());
+    for(size_t i = 0; i < d_swap_chain_images.size(); i++)
+    {
+        std::array<VkImageView, 2> attachments = {
+            d_swap_chain_image_views[i],
+            d_depth_image.view
+        };
+        VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = d_render_pass;
+		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+		framebufferInfo.pAttachments = attachments.data();
+		framebufferInfo.width = d_swap_chain_image_extent.width;
+		framebufferInfo.height = d_swap_chain_image_extent.height;
+		framebufferInfo.layers = 1;
+
+		if (vkCreateFramebuffer(p_backend->d_device, &framebufferInfo, nullptr, &d_swap_chain_framebuffers[i]) != VK_SUCCESS)
+			throw std::runtime_error("ERROR: failed to create Vulkan framebuffer!");
+    }
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan framebuffers created");}
+}
+
+void Renderer::createSyncObjects()
+{
+    LOGGING::Logger* myLogger = app->GetLogger();
+    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
+
+    d_semaphore_image.resize(MAX_FRAMES_IN_FLIGHT);
+	d_semaphore_render.resize(MAX_FRAMES_IN_FLIGHT);
+	d_fence_render.resize(MAX_FRAMES_IN_FLIGHT);
+	d_fence_image.resize(d_swap_chain_images.size(), VK_NULL_HANDLE);
+
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		if (vkCreateSemaphore(p_backend->d_device, &semaphoreInfo, nullptr, &d_semaphore_image[i]) != VK_SUCCESS ||
+			vkCreateSemaphore(p_backend->d_device, &semaphoreInfo, nullptr, &d_semaphore_render[i]) != VK_SUCCESS ||
+			vkCreateFence(p_backend->d_device, &fenceInfo, nullptr, &d_fence_render[i]) != VK_SUCCESS)
+		{
+			throw std::runtime_error("ERROR: failed to create Vulkan synchronization objects for each frame!");
+		}
+	}
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan sync objects created");}
+}
 
 VkSurfaceFormatKHR Renderer::selectSwapChainSurfaceFormat(const std::vector<VkSurfaceFormatKHR> availableFormats)
 {
@@ -427,6 +469,43 @@ VkExtent2D Renderer::selectSwapChainExtent(VkSurfaceCapabilitiesKHR& capabilitie
         actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
         return actualExtent;
     }
+}
+
+void Renderer::createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+{
+    VkImageCreateInfo imageInfo{};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.extent.width = width;
+	imageInfo.extent.height = height;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.format = format;
+	imageInfo.tiling = tiling;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageInfo.usage = usage;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.flags = 0;
+
+	if (vkCreateImage(p_backend->d_device, &imageInfo, nullptr, &image) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to create Vulkan image!");
+
+	VkMemoryRequirements memRequirements;
+	vkGetImageMemoryRequirements(p_backend->d_device, image, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = p_backend->findDeviceMemoryType(memRequirements.memoryTypeBits, properties);
+
+	if (vkAllocateMemory(p_backend->d_device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
+	{
+		throw std::runtime_error("failed to allocate image memory!");
+	}
+
+	vkBindImageMemory(p_backend->d_device, image, imageMemory, 0);
 }
 
 VkImageView Renderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
@@ -472,10 +551,129 @@ VkShaderModule Renderer::createShaderModule(const std::vector<char> code, const 
     return shaderModule;
 }
 
+void Renderer::transitionImageLayout(VkImage& image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+{
+    VkCommandBuffer commandBuffer = startSingleCommand();
+
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = oldLayout;
+	barrier.newLayout = newLayout;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = image;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.levelCount = 1;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+
+	if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+	{
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT)
+		{
+			barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+	}
+	else
+	{
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	}
+	
+	VkPipelineStageFlags srcStage;
+	VkPipelineStageFlags dstStage;
+
+	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+	{
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	{
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+	{
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		dstStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	}
+	else
+		throw std::runtime_error("ERROR: unsupported Vulkan layout transition!");
+
+	vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage,
+		0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+	stopSingleCommand(commandBuffer);
+}
+
+VkCommandBuffer Renderer::startSingleCommand()
+{
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = d_command_pool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(p_backend->d_device, &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    return commandBuffer;
+}
+
+void Renderer::stopSingleCommand(VkCommandBuffer& commandBuffer)
+{
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(p_backend->d_graphics_queue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(p_backend->d_graphics_queue);
+
+    vkFreeCommandBuffers(p_backend->d_device, d_command_pool, 1, &commandBuffer);
+}
+
+void Renderer::allocateRenderCommandBuffers(std::vector<VkCommandBuffer>& buffers)
+{
+    VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = d_command_pool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = (uint32_t)buffers.size();
+
+	if (vkAllocateCommandBuffers(p_backend->d_device, &allocInfo, buffers.data()) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to allocate Vulkan command buffers!");
+}
+
+void Renderer::freeRenderCommandBuffers(std::vector<VkCommandBuffer>& buffers)
+{
+    vkFreeCommandBuffers(p_backend->d_device, d_command_pool, static_cast<uint32_t>(buffers.size()), buffers.data());
+}
+
 void Renderer::destroySwapChain()
 {
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
+
+    d_depth_image.destroy(p_backend->d_device);
+
+    for(size_t i = 0; i < d_swap_chain_framebuffers.size(); i++)
+        vkDestroyFramebuffer(p_backend->d_device, d_swap_chain_framebuffers[i], nullptr);
 
     vkDestroyPipeline(p_backend->d_device, d_pipeline, nullptr);
     vkDestroyPipelineLayout(p_backend->d_device, d_pipeline_layout, nullptr);
