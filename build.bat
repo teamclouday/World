@@ -30,4 +30,3 @@ FOR /D %%d IN (*) DO (
 )
 CD ..
 ECHO Project Built
-PAUSE
