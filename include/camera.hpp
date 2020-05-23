@@ -5,7 +5,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -38,6 +37,7 @@ namespace UTILS
         glm::vec3 WorldUp;
         float MovementSpeed;
         float MouseSenditivity;
+        glm::vec3 PositionStarted;
 
     public:
         glm::vec3 Position;

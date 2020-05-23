@@ -12,6 +12,7 @@ Camera::Camera(glm::vec3 position, glm::vec3 up,
       mv_zoom(1.0f), keyMap(6, false), mousePos(2, 0)
 {
     this->Position = position;
+    this->PositionStarted = position;
     this->WorldUp = up;
     this->Yaw = yaw;
     this->Pitch = pitch;
@@ -26,6 +27,7 @@ Camera::Camera(float posX, float posY, float posZ,
       mv_zoom(1.0f), keyMap(6, false), mousePos(2, 0)
 {
     this->Position = glm::vec3(posX, posY, posZ);
+    this->PositionStarted = glm::vec3(posX, posY, posZ);
     this->WorldUp  = glm::vec3(upX, upY, upZ);
     this->Yaw   = yaw;
     this->Pitch = pitch;
@@ -44,7 +46,8 @@ void Camera::update(float deltaT, float xoffset, float yoffset)
     if(!this->focus)
         return;
 
-    this->ProcessMouseMovement(xoffset, yoffset);
+    if(xoffset || yoffset)
+        this->ProcessMouseMovement(xoffset, yoffset);
 
     if(this->keyMap[0])
         this->ProcessKeyboard(FORWARD, deltaT);
@@ -103,8 +106,8 @@ void Camera::ProcessMouseMovement(float xoffset, float yoffset, bool constrainPi
 
 void Camera::reset()
 {
-    this->Position = glm::vec3(0.0f, 1.0f, 5.0f);
-    this->WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+    this->Position = this->PositionStarted;
+    this->Front = glm::vec3(0.0f, 0.0f, 1.0f);
     this->Yaw = YAW;
     this->Pitch = PITCH;
     this->MovementSpeed = SPEED;

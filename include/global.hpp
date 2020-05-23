@@ -69,7 +69,7 @@ public:
     // parameters for setting camera
     glm::vec3 CAMERA_INIT_POS = glm::vec3(2.0f, 2.0f, 2.0f);
     glm::vec3 CAMERA_INIT_UP = glm::vec3(0.0f, 1.0f, 0.0f);
-    float CAMERA_SPEED = 1.0f;
+    float CAMERA_SPEED = 5.0f;
 
     // parameters for Logger
     std::string LOGGER_PATH = "world.log";

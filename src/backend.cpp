@@ -105,6 +105,8 @@ static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int act
             
         }
         if(!myCamera) return;
+        if(key == GLFW_KEY_R)
+            if(myCamera->focus) myCamera->reset();
         if(key == GLFW_KEY_W || key == GLFW_KEY_UP)
             if(myCamera->focus) myCamera->keyMap[0] = true;
         if(key == GLFW_KEY_A || key == GLFW_KEY_LEFT)
@@ -126,7 +128,6 @@ static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int act
         if(key == GLFW_KEY_D || key == GLFW_KEY_RIGHT)
             myCamera->keyMap[3] = false;
     }
-    if(myCamera) myCamera->update(app->CAMERA_SPEED, 0.0f, 0.0f);
 }
 
 static void glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -149,8 +150,8 @@ static void glfw_mouse_pos_callback(GLFWwindow* window, double xpos, double ypos
     if(!myCamera) return;
     if(myCamera->mousePosUpdated)
     {
-        float xoffset = xpos - myCamera->mousePos[0];
-        float yoffset = ypos - myCamera->mousePos[1];
+        float xoffset = static_cast<float>(myCamera->mousePos[0] - xpos);
+        float yoffset = static_cast<float>(ypos - myCamera->mousePos[1]);
         myCamera->update(app->CAMERA_SPEED, xoffset, yoffset);
     }
     myCamera->mousePos[0] = xpos;
