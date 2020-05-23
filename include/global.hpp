@@ -5,6 +5,7 @@
 
 #include "base.hpp"
 #include "data.hpp"
+#include "camera.hpp"
 #include "logging.hpp"
 
 #define APP_EXIT_SUCCESS    0
@@ -21,11 +22,16 @@ public:
 
     ~Application()
     {
+        GRAPH_MESHES.clear();
+        GRAPH_MESHES.resize(0);
         if(LOGGER_SAVE_LOG && _enable_logger)
             p_logger->DumpToFile(LOGGER_PATH);
         if(p_logger)
             delete p_logger;
         p_logger = nullptr;
+        if(p_camera)
+            delete p_camera;
+        p_camera = nullptr;
         if(p_renderer)
             delete p_renderer;
         p_renderer = nullptr;
@@ -34,12 +40,16 @@ public:
         p_backend = nullptr;
     }
 
+    void StartCamera(){p_camera = new UTILS::Camera(CAMERA_INIT_POS, CAMERA_INIT_UP);}
     void StartBackend(){p_backend = new BASE::Backend();}
     void StartRenderer(){p_renderer = new BASE::Renderer();}
+    void LoadGraph(){if(p_renderer) p_renderer->CreateGraph();}
+    void Loop(USER_UPDATE user_func){if(p_renderer) p_renderer->loop(user_func);}
 
     LOGGING::Logger* GetLogger(){return p_logger;}
     BASE::Backend* GetBackend(){return p_backend;}
     BASE::Renderer* GetRenderer(){return p_renderer;}
+    UTILS::Camera* GetCamera(){return p_camera;}
 
 public:
     // parameters for Backend
@@ -54,7 +64,12 @@ public:
     DATA::ShaderSourceDetails GRAPH_SHADER_DETAILS;
 
     // parameters for a graph
-    float RENDER_CLEAR_VALUES[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4 RENDER_CLEAR_VALUES = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    // parameters for setting camera
+    glm::vec3 CAMERA_INIT_POS = glm::vec3(2.0f, 2.0f, 2.0f);
+    glm::vec3 CAMERA_INIT_UP = glm::vec3(0.0f, 1.0f, 0.0f);
+    float CAMERA_SPEED = 1.0f;
 
     // parameters for Logger
     std::string LOGGER_PATH = "world.log";
@@ -70,4 +85,5 @@ private:
     LOGGING::Logger* p_logger = nullptr;
     BASE::Backend* p_backend = nullptr;
     BASE::Renderer* p_renderer = nullptr;
+    UTILS::Camera* p_camera = nullptr;
 };
