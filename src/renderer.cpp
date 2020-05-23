@@ -37,12 +37,14 @@ void Renderer::loop(USER_UPDATE user_func)
 
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
+    UTILS::Camera* myCamera = app->GetCamera();
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "loop started");}
 
     p_graph->createRenderCommandBuffers();
     while(!glfwWindowShouldClose(p_backend->p_window))
     {
         glfwPollEvents();
+        if(myCamera) myCamera->update(app->CAMERA_SPEED, 0.0f, 0.0f);
         drawFrame(user_func);
     }
 
@@ -315,9 +317,9 @@ void Renderer::createGraphicsPipeline()
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
 	vertexInputInfo.vertexBindingDescriptionCount = 1;
 	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -351,7 +353,7 @@ void Renderer::createGraphicsPipeline()
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -396,8 +398,8 @@ void Renderer::createGraphicsPipeline()
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &p_graph->d_desctiptor_sets.layout;
+	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(p_graph->d_desctiptor_sets.layout.size());
+	pipelineLayoutInfo.pSetLayouts = p_graph->d_desctiptor_sets.layout.data();
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -734,19 +736,23 @@ void Renderer::stopSingleCommand(VkCommandBuffer& commandBuffer)
     vkFreeCommandBuffers(p_backend->d_device, d_command_pool, 1, &commandBuffer);
 }
 
-void Renderer::allocateRenderCommandBuffers(std::vector<VkCommandBuffer>& buffers)
+std::vector<VkCommandBuffer> Renderer::allocateRenderCommandBuffers(size_t size)
 {
+    std::vector<VkCommandBuffer> buffers;
+    buffers.resize(size);
+
     VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = d_command_pool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = (uint32_t)buffers.size();
+	allocInfo.commandBufferCount = static_cast<uint32_t>(size);
 
 	if (vkAllocateCommandBuffers(p_backend->d_device, &allocInfo, buffers.data()) != VK_SUCCESS)
 		throw std::runtime_error("ERROR: failed to allocate Vulkan command buffers!");
+    return buffers;
 }
 
-void Renderer::freeRenderCommandBuffers(std::vector<VkCommandBuffer>& buffers)
+void Renderer::freeRenderCommandBuffers(std::vector<VkCommandBuffer> buffers)
 {
     vkFreeCommandBuffers(p_backend->d_device, d_command_pool, static_cast<uint32_t>(buffers.size()), buffers.data());
 }
@@ -797,8 +803,6 @@ void Renderer::recreateSwapChain()
 
     p_graph->onFrameSizeChangeEnd();
 }
-
-#include <iostream>
 
 void Renderer::updateUniformBuffers(USER_UPDATE user_func)
 {

@@ -53,12 +53,7 @@ void Graph::convertInputMeshes(std::vector<MeshInput>& meshes)
 		if(meshes[i].textureImagePath != "")
         	newMesh.texture = createTexture(meshes[i].textureImagePath);
         newMesh.allset = true;
-        d_meshes.push_back(newMesh);
-        d_ubo_per_mesh.push_back({
-            glm::mat4(1.0f),
-            glm::mat4(0.0f),
-            glm::mat4(0.0f),
-        });
+        d_ubo_per_mesh[i].model = glm::mat4(1.0f);
     }
 
 	if(myLogger){myLogger->AddMessage(myLoggerOwner, "graph meshes converted");}
@@ -81,29 +76,40 @@ void Graph::createDescriptorSets()
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_GRAPH;
 
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr;
+	d_desctiptor_sets.layout.resize(d_meshes.size());
+	for(size_t i = 0; i < d_meshes.size(); i++)
+	{
+		std::vector<VkDescriptorSetLayoutBinding> bindings{};
 
-	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-	samplerLayoutBinding.binding = 1;
-	samplerLayoutBinding.descriptorCount = 1;
-	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBinding.pImmutableSamplers = nullptr;
-	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+		uboLayoutBinding.binding = 0;
+		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uboLayoutBinding.descriptorCount = 1;
+		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		uboLayoutBinding.pImmutableSamplers = nullptr;
 
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+		bindings.push_back(uboLayoutBinding);
 
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
+		if(d_meshes[i].texture.allset)
+		{
+			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+			samplerLayoutBinding.binding = 1;
+			samplerLayoutBinding.descriptorCount = 1;
+			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			samplerLayoutBinding.pImmutableSamplers = nullptr;
+			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			bindings.push_back(samplerLayoutBinding);
+		}
 
-	if (vkCreateDescriptorSetLayout(d_device, &layoutInfo, nullptr, &d_desctiptor_sets.layout) != VK_SUCCESS)
+		VkDescriptorSetLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+		layoutInfo.pBindings = bindings.data();
+
+	if (vkCreateDescriptorSetLayout(d_device, &layoutInfo, nullptr, &d_desctiptor_sets.layout[i]) != VK_SUCCESS)
 		throw std::runtime_error("ERROR: failed to create Vulkan descriptor set layout!");
+	}
+
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan descriptor set layout created");}
 
     std::array<VkDescriptorPoolSize, 2> poolSize{};
@@ -122,12 +128,11 @@ void Graph::createDescriptorSets()
 		throw std::runtime_error("ERROR: failed to create Vulkan descriptor pool!");
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan descriptor pool created");}
 
-    std::vector<VkDescriptorSetLayout> layout(d_meshes.size(), d_desctiptor_sets.layout);
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = d_desctiptor_sets.pool;
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(d_meshes.size());
-	allocInfo.pSetLayouts = layout.data();
+	allocInfo.pSetLayouts = d_desctiptor_sets.layout.data();
 
     d_desctiptor_sets.sets.resize(d_meshes.size());
 	if (vkAllocateDescriptorSets(d_device, &allocInfo, d_desctiptor_sets.sets.data()) != VK_SUCCESS)
@@ -248,8 +253,7 @@ void Graph::createRenderCommandBuffers()
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_GRAPH;
 
     size_t swapChainImagesCount = app->GetRenderer()->getSwapChainImagesCount();
-    d_commands.resize(d_meshes.size() * swapChainImagesCount);
-    app->GetRenderer()->allocateRenderCommandBuffers(d_commands);
+    d_commands = app->GetRenderer()->allocateRenderCommandBuffers(swapChainImagesCount * d_meshes.size());
 
     for(size_t j = 0; j < swapChainImagesCount; j++)
     {
@@ -288,7 +292,7 @@ void Graph::createRenderCommandBuffers()
 		vkCmdBindDescriptorSets(d_commands[id], VK_PIPELINE_BIND_POINT_GRAPHICS, app->GetRenderer()->getGraphicsPipelineLayout(),
             0, 1, &d_desctiptor_sets.sets[i], 0, nullptr);
 
-		vkCmdDrawIndexed(d_commands[id], static_cast<uint32_t>(d_indice_buffers.size()), 1, 0, 0, 0);
+		vkCmdDrawIndexed(d_commands[id], static_cast<uint32_t>(d_meshes[i].indices.size()), 1, 0, 0, 0);
 		vkCmdEndRenderPass(d_commands[id]);
 
 		if (vkEndCommandBuffer(d_commands[id]) != VK_SUCCESS)
@@ -305,7 +309,7 @@ Texture Graph::createTexture(const std::string path)
 
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load((std::string(GLOB_FILE_FOLDER) + "/" + path).c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    VkDeviceSize imageSize = (uint64_t)texWidth * (uint64_t)texHeight * (uint64_t)texChannels;
+    VkDeviceSize imageSize = (uint64_t)texWidth * (uint64_t)texHeight * 4;
 
     if(!pixels)
     {
@@ -346,6 +350,8 @@ Texture Graph::createTexture(const std::string path)
 
 	if (vkCreateSampler(d_device, &samplerInfo, nullptr, &newTexture.sampler) != VK_SUCCESS)
 		throw std::runtime_error("ERROR: failed to create Vulkan texture sampler!");
+
+	newTexture.allset = true;
 
     stagingBuffer.destroy(d_device);
     return newTexture;

@@ -15,7 +15,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 
 #include <vector>
@@ -124,9 +123,9 @@ namespace BASE
         void CreateGraph();
 
         // allocate render command buffers
-        void allocateRenderCommandBuffers(std::vector<VkCommandBuffer>& buffers);
+        std::vector<VkCommandBuffer> allocateRenderCommandBuffers(size_t size);
         // free render command buffers
-        void freeRenderCommandBuffers(std::vector<VkCommandBuffer>& buffers);
+        void freeRenderCommandBuffers(std::vector<VkCommandBuffer> buffers);
         // begin a single immediate command
         VkCommandBuffer startSingleCommand();
         // stop a single immediate command

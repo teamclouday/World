@@ -6,7 +6,6 @@
 
 #include <Vulkan/Vulkan.h>
 
-#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 
 #include <vector>
@@ -117,14 +116,15 @@ namespace DATA
 
     struct DescriptorSet
     {
-        VkDescriptorSetLayout layout;
         VkDescriptorPool pool;
+        std::vector<VkDescriptorSetLayout> layout;
         std::vector<VkDescriptorSet> sets;
         bool allset = false;
         void destroy(VkDevice device)
         {
             if(!allset) return;
-            vkDestroyDescriptorSetLayout(device, layout, nullptr);
+            for(auto& ll : layout)
+                vkDestroyDescriptorSetLayout(device, ll, nullptr);
             vkDestroyDescriptorPool(device, pool, nullptr);
             sets.clear();
             sets.resize(0);
