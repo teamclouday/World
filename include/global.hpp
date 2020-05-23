@@ -4,7 +4,7 @@
 #pragma once
 
 #include "base.hpp"
-#include "utils.hpp"
+#include "data.hpp"
 #include "logging.hpp"
 
 #define APP_EXIT_SUCCESS    0
@@ -49,9 +49,12 @@ public:
     bool WINDOW_RESIZABLE = false;
     bool BACKEND_ENABLE_VALIDATION = true;
 
-    // parameters for Renderer
-    std::string SHADER_SOURCE_PATH = ".";
-    UTILS::ShaderSourceDetails SHADER_SOURCE_DETAILS;
+    // parameters for renderer creating a graph
+    std::vector<DATA::MeshInput> GRAPH_MESHES;
+    DATA::ShaderSourceDetails GRAPH_SHADER_DETAILS;
+
+    // parameters for a graph
+    float RENDER_CLEAR_VALUES[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 
     // parameters for Logger
     std::string LOGGER_PATH = "world.log";

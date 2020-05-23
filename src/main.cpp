@@ -11,14 +11,14 @@ int main()
     app->WINDOW_RESIZABLE = true;
     app->LOGGER_SAVE_LOG = true;
 
-    UTILS::ShaderSourceDetails details;
+    DATA::ShaderSourceDetails details;
     details.names.push_back("simple.vert.spv");
-    details.types.push_back(UTILS::SHADER_VERTEX);
+    details.types.push_back(DATA::SHADER_VERTEX);
     details.names.push_back("simple.frag.spv");
-    details.types.push_back(UTILS::SHADER_FRAGMENT);
+    details.types.push_back(DATA::SHADER_FRAGMENT);
+    details.path = "shaders/simple";
 
-    app->SHADER_SOURCE_DETAILS = details;
-    app->SHADER_SOURCE_PATH = "shaders/simple";
+    app->GRAPH_SHADER_DETAILS = details;
 
     try
     {
