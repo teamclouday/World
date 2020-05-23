@@ -185,6 +185,9 @@ namespace DATA
 
         // create render command buffers
         void createRenderCommandBuffers();
+        // frame size change callback
+        void onFrameSizeChangeStart();
+        void onFrameSizeChangeEnd();
 
     private:
         // process input meshes
@@ -209,12 +212,8 @@ namespace DATA
         void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
         // copy buffer to buffer helper function
         void copyBufferToBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-        // frame size change callback
-        void onFrameSizeChange();
 
     public:
-        VkDevice d_device;
-
         std::vector<Mesh> d_meshes;
         DescriptorSet d_desctiptor_sets;
 
@@ -225,5 +224,8 @@ namespace DATA
         std::vector<Buffer> d_indice_buffers;
 
         std::vector<VkCommandBuffer> d_commands;
+
+    private:
+        VkDevice d_device;
     };
 }

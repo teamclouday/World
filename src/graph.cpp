@@ -24,13 +24,13 @@ Graph::Graph(std::vector<MeshInput>& meshes, VkDevice backendDevice)
 Graph::~Graph()
 {
     app->GetRenderer()->freeRenderCommandBuffers(d_commands);
+	for(size_t i = 0; i < d_ubo_buffers.size(); i++)
+        d_ubo_buffers[i].destroy(d_device);
     for(size_t i = 0; i < d_indice_buffers.size(); i++)
         d_indice_buffers[i].destroy(d_device);
     for(size_t i = 0; i < d_vertex_buffers.size(); i++)
         d_vertex_buffers[i].destroy(d_device);
     d_desctiptor_sets.destroy(d_device);
-    for(size_t i = 0; i < d_ubo_buffers.size(); i++)
-        d_ubo_buffers[i].destroy(d_device);
     for(size_t i = 0; i < d_meshes.size(); i++)
         d_meshes[i].destroy(d_device);
     d_device = VK_NULL_HANDLE;
@@ -38,28 +38,36 @@ Graph::~Graph()
 
 void Graph::convertInputMeshes(std::vector<MeshInput>& meshes)
 {
+	LOGGING::Logger* myLogger = app->GetLogger();
+    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_GRAPH;
+
     d_meshes.resize(meshes.size());
     d_ubo_per_mesh.resize(meshes.size());
     for(size_t i = 0; i < meshes.size(); i++)
     {
-        Mesh newMesh;
-        newMesh.vertices = meshes[i].vertices;
-        newMesh.indices = meshes[i].indices;
-        newMesh.texture = createTexture(meshes[i].textureImagePath);
+        Mesh& newMesh = d_meshes[i];
+		newMesh.vertices.resize(meshes[i].vertices.size());
+        memcpy(newMesh.vertices.data(), meshes[i].vertices.data(), sizeof(Vertex) * meshes[i].vertices.size());
+		newMesh.indices.resize(meshes[i].indices.size());
+        memcpy(newMesh.indices.data(), meshes[i].indices.data(), sizeof(uint32_t) * meshes[i].indices.size());
+		if(meshes[i].textureImagePath != "")
+        	newMesh.texture = createTexture(meshes[i].textureImagePath);
         newMesh.allset = true;
         d_meshes.push_back(newMesh);
         d_ubo_per_mesh.push_back({
-            glm::mat4(0.0f),
+            glm::mat4(1.0f),
             glm::mat4(0.0f),
             glm::mat4(0.0f),
         });
     }
+
+	if(myLogger){myLogger->AddMessage(myLoggerOwner, "graph meshes converted");}
 }
 
 void Graph::createUniformBuffers()
 {
     VkDeviceSize bufferSize = sizeof(CameraUniform);
-
+	
     d_ubo_buffers.resize(d_meshes.size());
     for(size_t i = 0; i < d_meshes.size(); i++)
     {
@@ -128,36 +136,48 @@ void Graph::createDescriptorSets()
 
     for(size_t i = 0; i < d_meshes.size(); i++)
     {
+		std::vector<VkWriteDescriptorSet> descriptorWrite;
+
         VkDescriptorBufferInfo bufferInfo{};
 		bufferInfo.buffer = d_ubo_buffers[i].buf;
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(CameraUniform);
 
-		VkDescriptorImageInfo imageInfo{};
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo.imageView = d_meshes[i].texture.image.view;
-		imageInfo.sampler = d_meshes[i].texture.sampler;
+		VkWriteDescriptorSet writeUniform;
+		writeUniform.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeUniform.dstSet = d_desctiptor_sets.sets[i];
+		writeUniform.dstBinding = 0;
+		writeUniform.dstArrayElement = 0;
+		writeUniform.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writeUniform.descriptorCount = 1;
+		writeUniform.pBufferInfo = &bufferInfo;
+		writeUniform.pImageInfo = nullptr;
+		writeUniform.pTexelBufferView = nullptr;
+		writeUniform.pNext = nullptr;
 
-		std::array<VkWriteDescriptorSet, 2> descriptorWrite{};
-		descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[0].dstSet = d_desctiptor_sets.sets[i];
-		descriptorWrite[0].dstBinding = 0;
-		descriptorWrite[0].dstArrayElement = 0;
-		descriptorWrite[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrite[0].descriptorCount = 1;
-		descriptorWrite[0].pBufferInfo = &bufferInfo;
-		descriptorWrite[0].pImageInfo = nullptr;
-		descriptorWrite[0].pTexelBufferView = nullptr;
+		descriptorWrite.push_back(writeUniform);
 
-		descriptorWrite[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[1].dstSet = d_desctiptor_sets.sets[i];
-		descriptorWrite[1].dstBinding = 1;
-		descriptorWrite[1].dstArrayElement = 0;
-		descriptorWrite[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrite[1].descriptorCount = 1;
-		descriptorWrite[1].pBufferInfo = nullptr;
-		descriptorWrite[1].pImageInfo = &imageInfo;
-		descriptorWrite[1].pTexelBufferView = nullptr;
+		if(d_meshes[i].texture.allset)
+		{
+			VkDescriptorImageInfo imageInfo{};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = d_meshes[i].texture.image.view;
+			imageInfo.sampler = d_meshes[i].texture.sampler;
+
+			VkWriteDescriptorSet writeSampler;
+			writeSampler.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeSampler.dstSet = d_desctiptor_sets.sets[i];
+			writeSampler.dstBinding = 1;
+			writeSampler.dstArrayElement = 0;
+			writeSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeSampler.descriptorCount = 1;
+			writeSampler.pBufferInfo = nullptr;
+			writeSampler.pImageInfo = &imageInfo;
+			writeSampler.pTexelBufferView = nullptr;
+			writeSampler.pNext = nullptr;
+
+			descriptorWrite.push_back(writeSampler);
+		}
 
 		vkUpdateDescriptorSets(d_device, static_cast<uint32_t>(descriptorWrite.size()), descriptorWrite.data(), 0, nullptr);
     }
@@ -188,7 +208,7 @@ void Graph::createVertexBuffers()
 	    copyBufferToBuffer(stagingBuffer.buf, vertexBuffer.buf, bufferSize);
         stagingBuffer.destroy(d_device);
 
-        d_vertex_buffers.push_back(vertexBuffer);
+        d_vertex_buffers[i] = vertexBuffer;
     }
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan graph uniform buffers created");}
 }
@@ -217,7 +237,7 @@ void Graph::createIndiceBuffers()
 	    copyBufferToBuffer(stagingBuffer.buf, indiceBuffer.buf, bufferSize);
         stagingBuffer.destroy(d_device);
 
-        d_indice_buffers.push_back(indiceBuffer);
+        d_indice_buffers[i] = indiceBuffer;
     }
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan graph indice buffers created");}
 }
@@ -233,9 +253,9 @@ void Graph::createRenderCommandBuffers()
 
     for(size_t j = 0; j < swapChainImagesCount; j++)
     {
-    for (size_t i = 0; i < d_commands.size(); i++)
+    for (size_t i = 0; i < d_meshes.size(); i++)
 	{
-        size_t id = i + j * d_commands.size();
+        size_t id = i + j * d_meshes.size();
 
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -243,15 +263,16 @@ void Graph::createRenderCommandBuffers()
 		beginInfo.pInheritanceInfo = nullptr;
 
 		if (vkBeginCommandBuffer(d_commands[id], &beginInfo) != VK_SUCCESS)
-		{
-			throw std::runtime_error("failed to begin recording command buffer!");
-		}
+			throw std::runtime_error("ERROR: failed to begin recording Vulkan command buffer!");
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		app->GetRenderer()->fillRenderPassInfo(renderPassInfo, j);
 
 		std::array<VkClearValue, 2> clearValues{};
-		clearValues[0].color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		clearValues[0].color = {
+			app->RENDER_CLEAR_VALUES[0], app->RENDER_CLEAR_VALUES[1],
+			app->RENDER_CLEAR_VALUES[2], app->RENDER_CLEAR_VALUES[3],
+		};
 		clearValues[1].depthStencil = { 1.0f, 0 };
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		renderPassInfo.pClearValues = clearValues.data();
@@ -500,7 +521,15 @@ void Graph::copyBufferToBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceS
 	app->GetRenderer()->stopSingleCommand(commandBuffer);
 }
 
-void Graph::onFrameSizeChange()
+void Graph::onFrameSizeChangeStart()
 {
+	app->GetRenderer()->freeRenderCommandBuffers(d_commands);
+	d_desctiptor_sets.destroy(d_device);
+}
 
+void Graph::onFrameSizeChangeEnd()
+{
+	createUniformBuffers();
+    createDescriptorSets();
+	createRenderCommandBuffers();
 }
