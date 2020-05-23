@@ -29,5 +29,5 @@ FOR /D %%d IN (*) DO (
     CD ..
 )
 CD ..
-ECHO Project Successfully Built
+ECHO Project Built
 PAUSE

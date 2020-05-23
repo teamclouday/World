@@ -6,6 +6,7 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/external/glfw/include",
                 "${workspaceFolder}/external/glm/include",
+                "${workspaceFolder}/external/stb",
                 "${VK_SDK_PATH}/Include"
             ],
             "defines": [
