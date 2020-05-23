@@ -24,6 +24,9 @@
 
 #include "data.hpp"
 
+// user-defined uniform update function
+typedef void USER_UPDATE (DATA::CameraUniform& data);
+
 namespace BASE
 {
     struct VulkanQueueFamilyIndices
@@ -50,6 +53,8 @@ namespace BASE
     public:
         Backend();
         ~Backend();
+
+        GLFWwindow* getCurrentWindowPointer(){return p_window;}
 
     private:
         // create GLFW window and GLFW context
@@ -114,8 +119,9 @@ namespace BASE
         Renderer();
         ~Renderer();
 
-        void drawFrame();
-        void refresh();
+        void drawFrame(USER_UPDATE user_func);
+        void loop(USER_UPDATE user_func);
+        void CreateGraph();
 
         // allocate render command buffers
         void allocateRenderCommandBuffers(std::vector<VkCommandBuffer>& buffers);
@@ -140,6 +146,12 @@ namespace BASE
         VkPipelineLayout getGraphicsPipelineLayout(){return d_pipeline_layout;}
         // get swap chain images count
         size_t getSwapChainImagesCount(){return d_swap_chain_images.size();}
+        // get window width and height
+        void getSwapChainImageExtent(uint32_t& width, uint32_t& height)
+        {
+            width = d_swap_chain_image_extent.width;
+            height = d_swap_chain_image_extent.height;
+        }
 
     private:
         // create swap chain
@@ -175,8 +187,10 @@ namespace BASE
         void transitionImageLayout(VkImage& image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
         // destroy swap chain
         void destroySwapChain();
-
-    public:
+        // recreate swap chain
+        void recreateSwapChain();
+        // update uniform buffers
+        void updateUniformBuffers(USER_UPDATE user_func);
 
     private:
         Backend* p_backend;
@@ -197,6 +211,7 @@ namespace BASE
         std::vector<VkCommandBuffer> d_render_commands;
 
         const size_t MAX_FRAMES_IN_FLIGHT = 2;
+        size_t CURRENT_FRAME = 0;
         std::vector<VkSemaphore> d_semaphore_image;
         std::vector<VkSemaphore> d_semaphore_render;
         std::vector<VkFence> d_fence_render;
@@ -206,16 +221,6 @@ namespace BASE
 
         DATA::Graph* p_graph;
     };
-
-    // a GLFW key callback function
-    // TODO: add support for user-defined key-bindings
-    static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
-    {
-        if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        {
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-        }
-    }
 
     // GLFW frame buffer resize callback
     static void glfw_frame_resize_callback(GLFWwindow* window, int width, int height)

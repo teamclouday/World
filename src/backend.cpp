@@ -88,6 +88,76 @@ void BASE::DestroyDebugUtilsMessengerEXT(
 		func(instance, debugMessenger, pAllocator);
 }
 
+static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    UTILS::Camera* myCamera = app->GetCamera();
+    if(action == GLFW_PRESS)
+    {
+        if(key == GLFW_KEY_ESCAPE)
+        {
+            if(!myCamera || !myCamera->focus)
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            else
+            {
+                myCamera->focus = false;
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            }
+            
+        }
+        if(!myCamera) return;
+        if(key == GLFW_KEY_W || key == GLFW_KEY_UP)
+            if(myCamera->focus) myCamera->keyMap[0] = true;
+        if(key == GLFW_KEY_A || key == GLFW_KEY_LEFT)
+            if(myCamera->focus) myCamera->keyMap[1] = true;
+        if(key == GLFW_KEY_S || key == GLFW_KEY_DOWN)
+            if(myCamera->focus) myCamera->keyMap[2] = true;
+        if(key == GLFW_KEY_D || key == GLFW_KEY_RIGHT)
+            if(myCamera->focus) myCamera->keyMap[3] = true;
+    }
+    if(action == GLFW_RELEASE)
+    {
+        if(!myCamera) return;
+        if(key == GLFW_KEY_W || key == GLFW_KEY_UP)
+            myCamera->keyMap[0] = false;
+        if(key == GLFW_KEY_A || key == GLFW_KEY_LEFT)
+            myCamera->keyMap[1] = false;
+        if(key == GLFW_KEY_S || key == GLFW_KEY_DOWN)
+            myCamera->keyMap[2] = false;
+        if(key == GLFW_KEY_D || key == GLFW_KEY_RIGHT)
+            myCamera->keyMap[3] = false;
+    }
+    if(myCamera) myCamera->update(app->CAMERA_SPEED, 0.0f, 0.0f);
+}
+
+static void glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    UTILS::Camera* myCamera = app->GetCamera();
+    if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        if(!myCamera) return;
+        if(!myCamera->focus)
+        {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            myCamera->focus = true;
+        }
+    }
+}
+
+static void glfw_mouse_pos_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    UTILS::Camera* myCamera = app->GetCamera();
+    if(!myCamera) return;
+    if(myCamera->mousePosUpdated)
+    {
+        float xoffset = xpos - myCamera->mousePos[0];
+        float yoffset = ypos - myCamera->mousePos[1];
+        myCamera->update(app->CAMERA_SPEED, xoffset, yoffset);
+    }
+    myCamera->mousePos[0] = xpos;
+    myCamera->mousePos[1] = ypos;
+    if(!myCamera->mousePosUpdated) myCamera->mousePosUpdated = true;
+}
+
 using namespace BASE;
 
 Backend::Backend()
@@ -140,6 +210,8 @@ void Backend::createWindow()
     glfwSetWindowUserPointer(p_window, (void*)this);
     glfwSetFramebufferSizeCallback(p_window, glfw_frame_resize_callback);
     glfwSetKeyCallback(p_window, glfw_key_callback);
+    glfwSetMouseButtonCallback(p_window, glfw_mouse_button_callback);
+    glfwSetCursorPosCallback(p_window, glfw_mouse_pos_callback);
 }
 
 void Backend::createInstance()

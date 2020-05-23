@@ -17,31 +17,117 @@ Renderer::Renderer()
     p_backend = app->GetBackend();
     if(!p_backend)
         throw std::runtime_error("ERROR: backend not initialized when using renderer!");
-    p_graph = DATA::Graph::newGraph(app->GRAPH_MESHES, p_backend->d_device);
     createCommandPool();
     createSwapChain();
     createRenderPass();
-    createGraphicsPipeline();
     createDepthResources();
+    createSyncObjects();
+}
+
+void Renderer::CreateGraph()
+{
+    p_graph = DATA::Graph::newGraph(app->GRAPH_MESHES, p_backend->d_device);
+    createGraphicsPipeline();
     createFramebuffers();
 }
 
-void Renderer::refresh()
+void Renderer::loop(USER_UPDATE user_func)
 {
-    destroySwapChain();
+    if(!p_graph) return;
 
-    
+    LOGGING::Logger* myLogger = app->GetLogger();
+    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "loop started");}
 
+    p_graph->createRenderCommandBuffers();
+    while(!glfwWindowShouldClose(p_backend->p_window))
+    {
+        glfwPollEvents();
+        drawFrame(user_func);
+    }
 
+    vkDeviceWaitIdle(p_backend->d_device);
+
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "loop ended");}
 }
 
-void Renderer::drawFrame()
+void Renderer::drawFrame(USER_UPDATE user_func)
 {
+    vkWaitForFences(p_backend->d_device, 1, &d_fence_render[CURRENT_FRAME], VK_TRUE, UINT64_MAX);
 
+	uint32_t imageIndex;
+	VkResult result = vkAcquireNextImageKHR(p_backend->d_device, d_swap_chain, UINT64_MAX, d_semaphore_image[CURRENT_FRAME], VK_NULL_HANDLE, &imageIndex);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		recreateSwapChain();
+		return;
+	}
+	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+		throw std::runtime_error("ERROR: failed to acquire Vulkan swap chain image!");
+
+	if (d_fence_image[imageIndex] != VK_NULL_HANDLE)
+		vkWaitForFences(p_backend->d_device, 1, &d_fence_image[imageIndex], VK_TRUE, UINT64_MAX);
+	d_fence_image[imageIndex] = d_fence_render[CURRENT_FRAME];
+
+	updateUniformBuffers(user_func);
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	VkSemaphore waitSemaphores[] = { d_semaphore_image[CURRENT_FRAME] };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+
+    size_t commandBuffersCount = p_graph->d_meshes.size();
+    std::vector<VkCommandBuffer> commandBuffers(p_graph->d_commands.begin() + imageIndex * commandBuffersCount,
+        p_graph->d_commands.begin() + (imageIndex + 1) * commandBuffersCount);
+	submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffersCount);
+	submitInfo.pCommandBuffers = commandBuffers.data();
+
+	VkSemaphore signalSemaphores[] = { d_semaphore_render[CURRENT_FRAME] };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	vkResetFences(p_backend->d_device, 1, &d_fence_render[CURRENT_FRAME]);
+
+	if (vkQueueSubmit(p_backend->d_graphics_queue, 1, &submitInfo, d_fence_render[CURRENT_FRAME]) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to submit Vulkan draw command buffer!");
+
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+
+	VkSwapchainKHR swapChains[] = { d_swap_chain };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pResults = nullptr;
+
+	result = vkQueuePresentKHR(p_backend->d_present_queue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || p_backend->d_frame_refreshed)
+	{
+		p_backend->d_frame_refreshed = false;
+		recreateSwapChain();
+	}
+	else if (result != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to present Vulkan swap chain image!");
+
+	vkQueueWaitIdle(p_backend->d_present_queue);
+
+	CURRENT_FRAME = (CURRENT_FRAME + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 Renderer::~Renderer()
 {
+    if(p_graph)
+        delete p_graph;
+    p_graph = nullptr;
+
     destroySwapChain();
 
     p_backend = nullptr;
@@ -685,4 +771,44 @@ void Renderer::destroySwapChain()
     vkDestroySwapchainKHR(p_backend->d_device, d_swap_chain, nullptr);
 
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan swap chain destroyed");}
+}
+
+void Renderer::recreateSwapChain()
+{
+    int width = 0;
+	int height = 0;
+	glfwGetFramebufferSize(p_backend->p_window, &width, &height);
+	while (width == 0 || height == 0)
+	{
+		glfwGetFramebufferSize(p_backend->p_window, &width, &height);
+		glfwWaitEvents();
+	}
+
+    vkDeviceWaitIdle(p_backend->d_device);
+
+    p_graph->onFrameSizeChangeStart();
+	destroySwapChain();
+
+	createSwapChain();
+	createRenderPass();
+	createGraphicsPipeline();
+	createDepthResources();
+	createFramebuffers();
+
+    p_graph->onFrameSizeChangeEnd();
+}
+
+#include <iostream>
+
+void Renderer::updateUniformBuffers(USER_UPDATE user_func)
+{
+    for(size_t i = 0; i < p_graph->d_ubo_buffers.size(); i++)
+    {
+        user_func(p_graph->d_ubo_per_mesh[i]);
+
+        void* data;
+        vkMapMemory(p_backend->d_device, p_graph->d_ubo_buffers[i].mem, 0, sizeof(DATA::CameraUniform), 0, &data);
+        memcpy(data, &p_graph->d_ubo_per_mesh[i], sizeof(DATA::CameraUniform));
+        vkUnmapMemory(p_backend->d_device, p_graph->d_ubo_buffers[i].mem);
+    }
 }
