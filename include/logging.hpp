@@ -14,7 +14,8 @@ namespace LOGGING
         LOG_OWNERS_LOGGING  = 0,
         LOG_OWNERS_BACKEND  = 1,
         LOG_OWNERS_RENDERER = 2,
-        LOG_OWNERS_USER     = 3,
+        LOG_OWNERS_GRAPH    = 3,
+        LOG_OWNERS_USER     = 4,
     };
 
     // structure for each message
