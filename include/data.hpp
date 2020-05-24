@@ -40,11 +40,15 @@ namespace DATA
         }
     };
 
+    // reference possible types
+    // https://github.com/KhronosGroup/glTF/tree/master/specification/2.0/#meshes
     struct Vertex
     {
-        glm::vec3 pos;
-        glm::vec3 color;
-        glm::vec2 coord;
+        glm::vec3 pos; // POSITION
+        glm::vec3 normal; // NORMAL
+        glm::vec4 tangent; // TANGENT
+        glm::vec2 coord; // TEXCOORD_0
+        glm::vec4 color; // COLOR_0
 
         static VkVertexInputBindingDescription getBindingDescription()
 	    {
@@ -56,9 +60,9 @@ namespace DATA
 	    	return bindingDescription;
 	    }
 
-	    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
+	    static std::array<VkVertexInputAttributeDescription, 5> getAttributeDescriptions()
 	    {
-	    	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+	    	std::array<VkVertexInputAttributeDescription, 5> attributeDescriptions{};
 	    	attributeDescriptions[0].binding = 0;
 	    	attributeDescriptions[0].location = 0;
 	    	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -67,12 +71,22 @@ namespace DATA
 	    	attributeDescriptions[1].binding = 0;
 	    	attributeDescriptions[1].location = 1;
 	    	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	    	attributeDescriptions[1].offset = offsetof(Vertex, color);
+	    	attributeDescriptions[1].offset = offsetof(Vertex, normal);
 
 	    	attributeDescriptions[2].binding = 0;
 	    	attributeDescriptions[2].location = 2;
-	    	attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-	    	attributeDescriptions[2].offset = offsetof(Vertex, coord);
+	    	attributeDescriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	    	attributeDescriptions[2].offset = offsetof(Vertex, tangent);
+
+            attributeDescriptions[3].binding = 0;
+	    	attributeDescriptions[3].location = 3;
+	    	attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;
+	    	attributeDescriptions[3].offset = offsetof(Vertex, coord);
+
+            attributeDescriptions[4].binding = 0;
+	    	attributeDescriptions[4].location = 4;
+	    	attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	    	attributeDescriptions[4].offset = offsetof(Vertex, color);
 
 	    	return attributeDescriptions;
 	    }
@@ -152,7 +166,11 @@ namespace DATA
     {
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
-        Texture texture;
+        Texture* texture_base       = nullptr; // Binding = 1 // 0 is taken by uniform buffer
+        Texture* texture_rough      = nullptr; // Binding = 2
+        Texture* texture_normal     = nullptr; // Binding = 3
+        Texture* texture_occlusion  = nullptr; // Binding = 4
+        Texture* texture_emissive   = nullptr; // Binding = 5
         bool allset = false;
         void destroy(VkDevice device)
         {
@@ -185,6 +203,14 @@ namespace DATA
             return newGraph;
         }
 
+        Graph(const std::string modelPath);
+
+        static Graph* newGraph(const std::string modelPath)
+        {
+            Graph* newGraph = new Graph(modelPath);
+            return newGraph;
+        }
+
         // create render command buffers
         void createRenderCommandBuffers();
         // frame size change callback
@@ -203,21 +229,31 @@ namespace DATA
         // indice buffers
         void createIndiceBuffers();
         // create textures from image paths
-        void createTextures(const std::set<std::string> paths);
+        void createTexturesFromPaths(const std::set<std::string> paths);
         // create buffer helper function
         Buffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
         // create texture image helper function
-        Image createTextureImage(uint32_t width, uint32_t height, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer stagingBuffer);
+        Image createTextureImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat imageFormat,
+            VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer stagingBuffer);
+        // create mipmaps for texture image
+        void createTextureImageMipmaps(VkImage& image, VkFormat imageFormat, int32_t width, int32_t height, uint32_t mipLevels);
         // transition texture image layout
-        void transitionTextureImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+        void transitionTextureImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
         // copy buffer to image helper function
         void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
         // copy buffer to buffer helper function
         void copyBufferToBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
+        // model loading related functions
+        // load model type gltf
+        void loadModelGLTF(const std::string modelPath, bool binary);
+
     public:
         std::vector<Mesh> d_meshes;
-        std::map<std::string, Texture> d_unique_textures;
+    
+        std::map<std::string, Texture*> d_unique_textures_string_map;
+        std::map<int, Texture*> d_unique_textures_int_map;
+    
         DescriptorSet d_desctiptor_sets;
 
         std::vector<CameraUniform> d_ubo_per_mesh;

@@ -6,8 +6,7 @@ extern Application* app;
 
 #include <stdexcept>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include <stb_image.h>
 
 using namespace DATA;
 
@@ -24,8 +23,18 @@ Graph::Graph(std::vector<MeshInput>& meshes, VkDevice backendDevice)
 Graph::~Graph()
 {
     app->GetRenderer()->freeRenderCommandBuffers(d_commands);
-	for(auto tex : d_unique_textures)
-		tex.second.destroy(d_device);
+	for(auto tex : d_unique_textures_string_map)
+	{
+		tex.second->destroy(d_device);
+		delete tex.second;
+	}
+	d_unique_textures_string_map.clear();
+	for(auto tex : d_unique_textures_int_map)
+	{
+		tex.second->destroy(d_device);
+		delete tex.second;
+	}
+	d_unique_textures_int_map.clear();
 	for(size_t i = 0; i < d_ubo_buffers.size(); i++)
         d_ubo_buffers[i].destroy(d_device);
     for(size_t i = 0; i < d_indice_buffers.size(); i++)
@@ -49,7 +58,7 @@ void Graph::convertInputMeshes(std::vector<MeshInput>& meshes)
 	std::set<std::string> uniqueTexturePaths;
 	for(const auto& mesh : meshes)
 		uniqueTexturePaths.insert(mesh.textureImagePath);
-	createTextures(uniqueTexturePaths);
+	createTexturesFromPaths(uniqueTexturePaths);
 
     for(size_t i = 0; i < meshes.size(); i++)
     {
@@ -59,7 +68,7 @@ void Graph::convertInputMeshes(std::vector<MeshInput>& meshes)
 		newMesh.indices.resize(meshes[i].indices.size());
         memcpy(newMesh.indices.data(), meshes[i].indices.data(), sizeof(uint32_t) * meshes[i].indices.size());
 		if(meshes[i].textureImagePath != "")
-        	newMesh.texture = d_unique_textures[meshes[i].textureImagePath];
+        	newMesh.texture_base = d_unique_textures_string_map[meshes[i].textureImagePath]; // default base color texture
         newMesh.allset = true;
         d_ubo_per_mesh[i].model = glm::mat4(1.0f);
     }
@@ -98,10 +107,54 @@ void Graph::createDescriptorSets()
 
 		bindings.push_back(uboLayoutBinding);
 
-		if(d_meshes[i].texture.allset)
+		if(d_meshes[i].texture_base && d_meshes[i].texture_base->allset)
 		{
 			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
 			samplerLayoutBinding.binding = 1;
+			samplerLayoutBinding.descriptorCount = 1;
+			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			samplerLayoutBinding.pImmutableSamplers = nullptr;
+			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			bindings.push_back(samplerLayoutBinding);
+		}
+
+		if(d_meshes[i].texture_rough && d_meshes[i].texture_rough->allset)
+		{
+			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+			samplerLayoutBinding.binding = 2;
+			samplerLayoutBinding.descriptorCount = 1;
+			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			samplerLayoutBinding.pImmutableSamplers = nullptr;
+			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			bindings.push_back(samplerLayoutBinding);
+		}
+
+		if(d_meshes[i].texture_normal && d_meshes[i].texture_normal->allset)
+		{
+			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+			samplerLayoutBinding.binding = 3;
+			samplerLayoutBinding.descriptorCount = 1;
+			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			samplerLayoutBinding.pImmutableSamplers = nullptr;
+			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			bindings.push_back(samplerLayoutBinding);
+		}
+
+		if(d_meshes[i].texture_occlusion && d_meshes[i].texture_occlusion->allset)
+		{
+			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+			samplerLayoutBinding.binding = 4;
+			samplerLayoutBinding.descriptorCount = 1;
+			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			samplerLayoutBinding.pImmutableSamplers = nullptr;
+			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			bindings.push_back(samplerLayoutBinding);
+		}
+
+		if(d_meshes[i].texture_emissive && d_meshes[i].texture_emissive->allset)
+		{
+			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+			samplerLayoutBinding.binding = 5;
 			samplerLayoutBinding.descriptorCount = 1;
 			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			samplerLayoutBinding.pImmutableSamplers = nullptr;
@@ -170,17 +223,105 @@ void Graph::createDescriptorSets()
 
 		descriptorWrite.push_back(writeUniform);
 
-		if(d_meshes[i].texture.allset)
+		if(d_meshes[i].texture_base && d_meshes[i].texture_base->allset)
 		{
 			VkDescriptorImageInfo imageInfo{};
 			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = d_meshes[i].texture.image.view;
-			imageInfo.sampler = d_meshes[i].texture.sampler;
+			imageInfo.imageView = d_meshes[i].texture_base->image.view;
+			imageInfo.sampler = d_meshes[i].texture_base->sampler;
 
 			VkWriteDescriptorSet writeSampler;
 			writeSampler.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeSampler.dstSet = d_desctiptor_sets.sets[i];
 			writeSampler.dstBinding = 1;
+			writeSampler.dstArrayElement = 0;
+			writeSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeSampler.descriptorCount = 1;
+			writeSampler.pBufferInfo = nullptr;
+			writeSampler.pImageInfo = &imageInfo;
+			writeSampler.pTexelBufferView = nullptr;
+			writeSampler.pNext = nullptr;
+
+			descriptorWrite.push_back(writeSampler);
+		}
+
+		if(d_meshes[i].texture_rough && d_meshes[i].texture_rough->allset)
+		{
+			VkDescriptorImageInfo imageInfo{};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = d_meshes[i].texture_rough->image.view;
+			imageInfo.sampler = d_meshes[i].texture_rough->sampler;
+
+			VkWriteDescriptorSet writeSampler;
+			writeSampler.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeSampler.dstSet = d_desctiptor_sets.sets[i];
+			writeSampler.dstBinding = 2;
+			writeSampler.dstArrayElement = 0;
+			writeSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeSampler.descriptorCount = 1;
+			writeSampler.pBufferInfo = nullptr;
+			writeSampler.pImageInfo = &imageInfo;
+			writeSampler.pTexelBufferView = nullptr;
+			writeSampler.pNext = nullptr;
+
+			descriptorWrite.push_back(writeSampler);
+		}
+
+		if(d_meshes[i].texture_normal && d_meshes[i].texture_normal->allset)
+		{
+			VkDescriptorImageInfo imageInfo{};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = d_meshes[i].texture_normal->image.view;
+			imageInfo.sampler = d_meshes[i].texture_normal->sampler;
+
+			VkWriteDescriptorSet writeSampler;
+			writeSampler.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeSampler.dstSet = d_desctiptor_sets.sets[i];
+			writeSampler.dstBinding = 3;
+			writeSampler.dstArrayElement = 0;
+			writeSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeSampler.descriptorCount = 1;
+			writeSampler.pBufferInfo = nullptr;
+			writeSampler.pImageInfo = &imageInfo;
+			writeSampler.pTexelBufferView = nullptr;
+			writeSampler.pNext = nullptr;
+
+			descriptorWrite.push_back(writeSampler);
+		}
+
+		if(d_meshes[i].texture_occlusion && d_meshes[i].texture_occlusion->allset)
+		{
+			VkDescriptorImageInfo imageInfo{};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = d_meshes[i].texture_occlusion->image.view;
+			imageInfo.sampler = d_meshes[i].texture_occlusion->sampler;
+
+			VkWriteDescriptorSet writeSampler;
+			writeSampler.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeSampler.dstSet = d_desctiptor_sets.sets[i];
+			writeSampler.dstBinding = 4;
+			writeSampler.dstArrayElement = 0;
+			writeSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeSampler.descriptorCount = 1;
+			writeSampler.pBufferInfo = nullptr;
+			writeSampler.pImageInfo = &imageInfo;
+			writeSampler.pTexelBufferView = nullptr;
+			writeSampler.pNext = nullptr;
+
+			descriptorWrite.push_back(writeSampler);
+		}
+
+		if(d_meshes[i].texture_emissive && d_meshes[i].texture_emissive->allset)
+		{
+			VkDescriptorImageInfo imageInfo{};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = d_meshes[i].texture_emissive->image.view;
+			imageInfo.sampler = d_meshes[i].texture_emissive->sampler;
+
+			VkWriteDescriptorSet writeSampler;
+			writeSampler.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeSampler.dstSet = d_desctiptor_sets.sets[i];
+			writeSampler.dstBinding = 5;
 			writeSampler.dstArrayElement = 0;
 			writeSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			writeSampler.descriptorCount = 1;
@@ -235,6 +376,12 @@ void Graph::createIndiceBuffers()
     for(size_t i = 0; i < d_meshes.size(); i++)
     {
         VkDeviceSize bufferSize = (uint64_t)(sizeof(uint32_t)) * d_meshes[i].indices.size();
+
+		if(!bufferSize)
+		{
+			d_indice_buffers[i] = {};
+			continue;
+		}
 
         Buffer stagingBuffer = createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -296,11 +443,14 @@ void Graph::createRenderCommandBuffers()
 		VkBuffer vertexBuffers[] = { d_vertex_buffers[i].buf };
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(d_commands[id], 0, 1, vertexBuffers, offsets);
-		vkCmdBindIndexBuffer(d_commands[id], d_indice_buffers[i].buf, 0, VK_INDEX_TYPE_UINT32);
+		if(d_indice_buffers[i].allset)
+			vkCmdBindIndexBuffer(d_commands[id], d_indice_buffers[i].buf, 0, VK_INDEX_TYPE_UINT32);
 		vkCmdBindDescriptorSets(d_commands[id], VK_PIPELINE_BIND_POINT_GRAPHICS, app->GetRenderer()->getGraphicsPipelineLayout(),
             0, 1, &d_desctiptor_sets.sets[i], 0, nullptr);
-
-		vkCmdDrawIndexed(d_commands[id], static_cast<uint32_t>(d_meshes[i].indices.size()), 1, 0, 0, 0);
+		if(d_indice_buffers[i].allset)
+			vkCmdDrawIndexed(d_commands[id], static_cast<uint32_t>(d_meshes[i].indices.size()), 1, 0, 0, 0);
+		else
+			vkCmdDraw(d_commands[id], static_cast<uint32_t>(d_meshes[i].vertices.size()), 1, 0, 0);
 		vkCmdEndRenderPass(d_commands[id]);
 
 		if (vkEndCommandBuffer(d_commands[id]) != VK_SUCCESS)
@@ -311,11 +461,11 @@ void Graph::createRenderCommandBuffers()
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan render command buffers created");}
 }
 
-void Graph::createTextures(const std::set<std::string> paths)
+void Graph::createTexturesFromPaths(const std::set<std::string> paths)
 {
 	for(const auto& path : paths)
 	{
-    	Texture newTexture;
+    	Texture *newTexture = new Texture;
 
     	int texWidth, texHeight, texChannels;
     	stbi_uc* pixels = stbi_load((std::string(GLOB_FILE_FOLDER) + "/" + path).c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -337,7 +487,9 @@ void Graph::createTextures(const std::set<std::string> paths)
 
     	stbi_image_free(pixels);
 
-    	newTexture.image = createTextureImage(static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight),
+		uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
+
+    	newTexture->image = createTextureImage(static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), mipLevels, VK_FORMAT_R8G8B8A8_SRGB,
     	    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stagingBuffer.buf);
 
     	VkSamplerCreateInfo samplerInfo{};
@@ -356,16 +508,16 @@ void Graph::createTextures(const std::set<std::string> paths)
 		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		samplerInfo.mipLodBias = 0.0f;
 		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = 0.0f;
+		samplerInfo.maxLod = static_cast<float>(mipLevels);
 
-		if (vkCreateSampler(d_device, &samplerInfo, nullptr, &newTexture.sampler) != VK_SUCCESS)
+		if (vkCreateSampler(d_device, &samplerInfo, nullptr, &newTexture->sampler) != VK_SUCCESS)
 			throw std::runtime_error("ERROR: failed to create Vulkan texture sampler!");
 
-		newTexture.allset = true;
+		newTexture->allset = true;
 
     	stagingBuffer.destroy(d_device);
     	
-		d_unique_textures[path] = newTexture;
+		d_unique_textures_string_map[path] = newTexture;
 	}
 
 }
@@ -398,7 +550,8 @@ Buffer Graph::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemory
     return newBuffer;
 }
 
-Image Graph::createTextureImage(uint32_t width, uint32_t height, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer stagingBuffer)
+Image Graph::createTextureImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat imageFormat,
+	VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer stagingBuffer)
 {
     Image newImage;
 
@@ -408,9 +561,9 @@ Image Graph::createTextureImage(uint32_t width, uint32_t height, VkBufferUsageFl
 	imageInfo.extent.width = width;
 	imageInfo.extent.height = height;
 	imageInfo.extent.depth = 1;
-	imageInfo.mipLevels = 1;
+	imageInfo.mipLevels = mipLevels;
 	imageInfo.arrayLayers = 1;
-	imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	imageInfo.format = imageFormat;
 	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageInfo.usage = usage;
@@ -434,9 +587,10 @@ Image Graph::createTextureImage(uint32_t width, uint32_t height, VkBufferUsageFl
 
 	vkBindImageMemory(d_device, newImage.image, newImage.mem, 0);
 
-    transitionTextureImageLayout(newImage.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    transitionTextureImageLayout(newImage.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
     copyBufferToImage(stagingBuffer, newImage.image, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-    transitionTextureImageLayout(newImage.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	createTextureImageMipmaps(newImage.image, imageFormat, static_cast<int32_t>(width), static_cast<int32_t>(height), mipLevels);
+    // transitionTextureImageLayout(newImage.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -445,7 +599,7 @@ Image Graph::createTextureImage(uint32_t width, uint32_t height, VkBufferUsageFl
 	viewInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.levelCount = mipLevels;
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 1;
 	viewInfo.components = {
@@ -462,7 +616,81 @@ Image Graph::createTextureImage(uint32_t width, uint32_t height, VkBufferUsageFl
     return newImage;
 }
 
-void Graph::transitionTextureImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+void Graph::createTextureImageMipmaps(VkImage& image, VkFormat imageFormat, int32_t width, int32_t height, uint32_t mipLevels)
+{
+	VkFormatProperties formatProperties;
+	vkGetPhysicalDeviceFormatProperties(app->GetBackend()->d_physical_device, imageFormat, &formatProperties);
+	if(!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
+		throw std::runtime_error("ERROR: failed to create mipmaps for texture image!");
+
+	VkCommandBuffer commandBuffer = app->GetRenderer()->startSingleCommand();
+
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.image = image;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+	barrier.subresourceRange.levelCount = 1;
+
+	int32_t mipWidth = width;
+	int32_t mipHeight = height;
+
+	for(uint32_t i = 1; i < mipLevels; i++)
+	{
+		barrier.subresourceRange.baseMipLevel = i - 1;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+		vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+			0, nullptr, 0, nullptr, 1, &barrier);
+
+		VkImageBlit blit{};
+		blit.srcOffsets[0] = { 0, 0, 0 };
+		blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+		blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		blit.srcSubresource.mipLevel = i - 1;
+		blit.srcSubresource.baseArrayLayer = 0;
+		blit.srcSubresource.layerCount = 1;
+		blit.dstOffsets[0] = { 0, 0, 0 };
+		blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+		blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		blit.dstSubresource.mipLevel = i;
+		blit.dstSubresource.baseArrayLayer = 0;
+		blit.dstSubresource.layerCount = 1;
+
+		vkCmdBlitImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &blit, VK_FILTER_LINEAR);
+		
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+    		0, nullptr, 0, nullptr, 1, &barrier);
+
+		if(mipWidth > 1) mipWidth /= 2;
+		if(mipHeight > 1) mipHeight /= 2;
+	}
+
+	barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+        0, nullptr, 0, nullptr, 1, &barrier);
+
+	app->GetRenderer()->stopSingleCommand(commandBuffer);
+}
+
+void Graph::transitionTextureImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
 {
     VkCommandBuffer commandBuffer = app->GetRenderer()->startSingleCommand();
 
@@ -474,7 +702,7 @@ void Graph::transitionTextureImageLayout(VkImage image, VkFormat format, VkImage
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.image = image;
 	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
+	barrier.subresourceRange.levelCount = mipLevels;
 	barrier.subresourceRange.baseArrayLayer = 0;
 	barrier.subresourceRange.layerCount = 1;
 	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
