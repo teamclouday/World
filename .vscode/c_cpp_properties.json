@@ -6,7 +6,6 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/external/glfw/include",
                 "${workspaceFolder}/external/glm/include",
-                "${workspaceFolder}/external/stb",
                 "${workspaceFolder}/external/tinygltf",
                 "${VK_SDK_PATH}/Include"
             ],
