@@ -7,6 +7,7 @@
                 "${workspaceFolder}/external/glfw/include",
                 "${workspaceFolder}/external/glm/include",
                 "${workspaceFolder}/external/stb",
+                "${workspaceFolder}/external/tinygltf",
                 "${VK_SDK_PATH}/Include"
             ],
             "defines": [
@@ -16,7 +17,7 @@
             ],
             "windowsSdkVersion": "10.0.18362.0",
             "intelliSenseMode": "msvc-x86",
-            "cppStandard": "c++11"
+            "cppStandard": "c++14"
         }
     ],
     "version": 4
