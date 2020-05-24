@@ -24,7 +24,8 @@ Graph::Graph(std::vector<MeshInput>& meshes, VkDevice backendDevice)
 Graph::~Graph()
 {
     app->GetRenderer()->freeRenderCommandBuffers(d_commands);
-	// TODO: Free texture resources
+	for(auto tex : d_unique_textures)
+		tex.second.destroy(d_device);
 	for(size_t i = 0; i < d_ubo_buffers.size(); i++)
         d_ubo_buffers[i].destroy(d_device);
     for(size_t i = 0; i < d_indice_buffers.size(); i++)

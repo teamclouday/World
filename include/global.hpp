@@ -5,6 +5,7 @@
 
 #include "base.hpp"
 #include "data.hpp"
+#include "model.hpp"
 #include "camera.hpp"
 #include "logging.hpp"
 
