@@ -11,6 +11,8 @@
 #include <vector>
 #include <string>
 #include <array>
+#include <map>
+#include <set>
 
 namespace DATA
 {
@@ -159,7 +161,7 @@ namespace DATA
             vertices.resize(0);
             indices.clear();
             indices.resize(0);
-            texture.destroy(device);
+            // texture.destroy(device); // texture resources should not be managed by mesh
             allset = false;
         }
     };
@@ -200,8 +202,8 @@ namespace DATA
         void createVertexBuffers();
         // indice buffers
         void createIndiceBuffers();
-        // create texture from image
-        Texture createTexture(const std::string path);
+        // create textures from image paths
+        void createTextures(const std::set<std::string> paths);
         // create buffer helper function
         Buffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
         // create texture image helper function
@@ -215,6 +217,7 @@ namespace DATA
 
     public:
         std::vector<Mesh> d_meshes;
+        std::map<std::string, Texture> d_unique_textures;
         DescriptorSet d_desctiptor_sets;
 
         std::vector<CameraUniform> d_ubo_per_mesh;

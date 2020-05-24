@@ -24,6 +24,7 @@ Graph::Graph(std::vector<MeshInput>& meshes, VkDevice backendDevice)
 Graph::~Graph()
 {
     app->GetRenderer()->freeRenderCommandBuffers(d_commands);
+	// TODO: Free texture resources
 	for(size_t i = 0; i < d_ubo_buffers.size(); i++)
         d_ubo_buffers[i].destroy(d_device);
     for(size_t i = 0; i < d_indice_buffers.size(); i++)
@@ -43,6 +44,12 @@ void Graph::convertInputMeshes(std::vector<MeshInput>& meshes)
 
     d_meshes.resize(meshes.size());
     d_ubo_per_mesh.resize(meshes.size());
+
+	std::set<std::string> uniqueTexturePaths;
+	for(const auto& mesh : meshes)
+		uniqueTexturePaths.insert(mesh.textureImagePath);
+	createTextures(uniqueTexturePaths);
+
     for(size_t i = 0; i < meshes.size(); i++)
     {
         Mesh& newMesh = d_meshes[i];
@@ -51,7 +58,7 @@ void Graph::convertInputMeshes(std::vector<MeshInput>& meshes)
 		newMesh.indices.resize(meshes[i].indices.size());
         memcpy(newMesh.indices.data(), meshes[i].indices.data(), sizeof(uint32_t) * meshes[i].indices.size());
 		if(meshes[i].textureImagePath != "")
-        	newMesh.texture = createTexture(meshes[i].textureImagePath);
+        	newMesh.texture = d_unique_textures[meshes[i].textureImagePath];
         newMesh.allset = true;
         d_ubo_per_mesh[i].model = glm::mat4(1.0f);
     }
@@ -303,58 +310,63 @@ void Graph::createRenderCommandBuffers()
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan render command buffers created");}
 }
 
-Texture Graph::createTexture(const std::string path)
+void Graph::createTextures(const std::set<std::string> paths)
 {
-    Texture newTexture;
+	for(const auto& path : paths)
+	{
+    	Texture newTexture;
 
-    int texWidth, texHeight, texChannels;
-    stbi_uc* pixels = stbi_load((std::string(GLOB_FILE_FOLDER) + "/" + path).c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    VkDeviceSize imageSize = (uint64_t)texWidth * (uint64_t)texHeight * 4;
+    	int texWidth, texHeight, texChannels;
+    	stbi_uc* pixels = stbi_load((std::string(GLOB_FILE_FOLDER) + "/" + path).c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    	VkDeviceSize imageSize = (uint64_t)texWidth * (uint64_t)texHeight * 4;
 
-    if(!pixels)
-    {
-        std::string message = "ERROR: failed to load image " + path + "!\nSTB failure reason: " + std::string(stbi_failure_reason());
-        throw std::runtime_error(message);
-    }
+    	if(!pixels)
+    	{
+    	    std::string message = "ERROR: failed to load image " + path + "!\nSTB failure reason: " + std::string(stbi_failure_reason());
+    	    throw std::runtime_error(message);
+    	}
 
-    Buffer stagingBuffer = createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    	Buffer stagingBuffer = createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-    void* data;
-    vkMapMemory(d_device, stagingBuffer.mem, 0, imageSize, 0, &data);
-    memcpy(data, pixels, static_cast<size_t>(imageSize));
-    vkUnmapMemory(d_device, stagingBuffer.mem);
+    	void* data;
+    	vkMapMemory(d_device, stagingBuffer.mem, 0, imageSize, 0, &data);
+    	memcpy(data, pixels, static_cast<size_t>(imageSize));
+    	vkUnmapMemory(d_device, stagingBuffer.mem);
 
-    stbi_image_free(pixels);
+    	stbi_image_free(pixels);
 
-    newTexture.image = createTextureImage(static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight),
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stagingBuffer.buf);
+    	newTexture.image = createTextureImage(static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight),
+    	    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stagingBuffer.buf);
 
-    VkSamplerCreateInfo samplerInfo{};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.anisotropyEnable = VK_TRUE;
-	samplerInfo.maxAnisotropy = 16.0f;
-	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-	samplerInfo.unnormalizedCoordinates = VK_FALSE;
-	samplerInfo.compareEnable = VK_FALSE;
-	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 0.0f;
+    	VkSamplerCreateInfo samplerInfo{};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = VK_TRUE;
+		samplerInfo.maxAnisotropy = 16.0f;
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0.0f;
+		samplerInfo.minLod = 0.0f;
+		samplerInfo.maxLod = 0.0f;
 
-	if (vkCreateSampler(d_device, &samplerInfo, nullptr, &newTexture.sampler) != VK_SUCCESS)
-		throw std::runtime_error("ERROR: failed to create Vulkan texture sampler!");
+		if (vkCreateSampler(d_device, &samplerInfo, nullptr, &newTexture.sampler) != VK_SUCCESS)
+			throw std::runtime_error("ERROR: failed to create Vulkan texture sampler!");
 
-	newTexture.allset = true;
+		newTexture.allset = true;
 
-    stagingBuffer.destroy(d_device);
-    return newTexture;
+    	stagingBuffer.destroy(d_device);
+    	
+		d_unique_textures[path] = newTexture;
+	}
+
 }
 
 Buffer Graph::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
