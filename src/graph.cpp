@@ -93,83 +93,51 @@ void Graph::createDescriptorSets()
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_GRAPH;
 
-	d_desctiptor_sets.layout.resize(d_meshes.size());
-	for(size_t i = 0; i < d_meshes.size(); i++)
-	{
-		std::vector<VkDescriptorSetLayoutBinding> bindings{};
+	std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
 
-    	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-		uboLayoutBinding.binding = 0;
-		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		uboLayoutBinding.descriptorCount = 1;
-		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		uboLayoutBinding.pImmutableSamplers = nullptr;
+	bindings[0].binding = 0;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[0].descriptorCount = 1;
+	bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	bindings[0].pImmutableSamplers = nullptr;
 
-		bindings.push_back(uboLayoutBinding);
+	bindings[1].binding = 1;
+	bindings[1].descriptorCount = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[1].pImmutableSamplers = nullptr;
+	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		if(d_meshes[i].texture_base && d_meshes[i].texture_base->allset)
-		{
-			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-			samplerLayoutBinding.binding = 1;
-			samplerLayoutBinding.descriptorCount = 1;
-			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			samplerLayoutBinding.pImmutableSamplers = nullptr;
-			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			bindings.push_back(samplerLayoutBinding);
-		}
+	bindings[2].binding = 2;
+	bindings[2].descriptorCount = 1;
+	bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[2].pImmutableSamplers = nullptr;
+	bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		if(d_meshes[i].texture_rough && d_meshes[i].texture_rough->allset)
-		{
-			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-			samplerLayoutBinding.binding = 2;
-			samplerLayoutBinding.descriptorCount = 1;
-			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			samplerLayoutBinding.pImmutableSamplers = nullptr;
-			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			bindings.push_back(samplerLayoutBinding);
-		}
+	bindings[3].binding = 3;
+	bindings[3].descriptorCount = 1;
+	bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[3].pImmutableSamplers = nullptr;
+	bindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		if(d_meshes[i].texture_normal && d_meshes[i].texture_normal->allset)
-		{
-			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-			samplerLayoutBinding.binding = 3;
-			samplerLayoutBinding.descriptorCount = 1;
-			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			samplerLayoutBinding.pImmutableSamplers = nullptr;
-			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			bindings.push_back(samplerLayoutBinding);
-		}
+	bindings[4].binding = 4;
+	bindings[4].descriptorCount = 1;
+	bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[4].pImmutableSamplers = nullptr;
+	bindings[4].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		if(d_meshes[i].texture_occlusion && d_meshes[i].texture_occlusion->allset)
-		{
-			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-			samplerLayoutBinding.binding = 4;
-			samplerLayoutBinding.descriptorCount = 1;
-			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			samplerLayoutBinding.pImmutableSamplers = nullptr;
-			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			bindings.push_back(samplerLayoutBinding);
-		}
+	bindings[5].binding = 5;
+	bindings[5].descriptorCount = 1;
+	bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[5].pImmutableSamplers = nullptr;
+	bindings[5].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		if(d_meshes[i].texture_emissive && d_meshes[i].texture_emissive->allset)
-		{
-			VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-			samplerLayoutBinding.binding = 5;
-			samplerLayoutBinding.descriptorCount = 1;
-			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			samplerLayoutBinding.pImmutableSamplers = nullptr;
-			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			bindings.push_back(samplerLayoutBinding);
-		}
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
 
-		VkDescriptorSetLayoutCreateInfo layoutInfo{};
-		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-		layoutInfo.pBindings = bindings.data();
-
-	if (vkCreateDescriptorSetLayout(d_device, &layoutInfo, nullptr, &d_desctiptor_sets.layout[i]) != VK_SUCCESS)
+	if (vkCreateDescriptorSetLayout(d_device, &layoutInfo, nullptr, &d_desctiptor_sets.layout) != VK_SUCCESS)
 		throw std::runtime_error("ERROR: failed to create Vulkan descriptor set layout!");
-	}
 
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan descriptor set layout created");}
 
@@ -189,11 +157,13 @@ void Graph::createDescriptorSets()
 		throw std::runtime_error("ERROR: failed to create Vulkan descriptor pool!");
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan descriptor pool created");}
 
+	std::vector<VkDescriptorSetLayout> layouts(d_meshes.size(), d_desctiptor_sets.layout);
+
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = d_desctiptor_sets.pool;
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(d_meshes.size());
-	allocInfo.pSetLayouts = d_desctiptor_sets.layout.data();
+	allocInfo.pSetLayouts = layouts.data();
 
     d_desctiptor_sets.sets.resize(d_meshes.size());
 	if (vkAllocateDescriptorSets(d_device, &allocInfo, d_desctiptor_sets.sets.data()) != VK_SUCCESS)

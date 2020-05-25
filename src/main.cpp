@@ -11,7 +11,7 @@ void update_uniform(DATA::CameraUniform& data)
     uint32_t width, height;
     p_renderer->getSwapChainImageExtent(width, height);
     data.view = app->GetCamera()->GetViewMatrix();
-    data.proj = glm::perspective(glm::radians(60.0f), static_cast<float>(width) / static_cast<float>(height), 0.1f, 100.0f);
+    data.proj = glm::perspective(glm::radians(60.0f), static_cast<float>(width) / static_cast<float>(height), 0.1f, 1000.0f);
 }
 
 int main()

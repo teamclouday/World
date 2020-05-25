@@ -135,14 +135,13 @@ namespace DATA
     struct DescriptorSet
     {
         VkDescriptorPool pool;
-        std::vector<VkDescriptorSetLayout> layout;
+        VkDescriptorSetLayout layout;
         std::vector<VkDescriptorSet> sets;
         bool allset = false;
         void destroy(VkDevice device)
         {
             if(!allset) return;
-            for(auto& ll : layout)
-                vkDestroyDescriptorSetLayout(device, ll, nullptr);
+            vkDestroyDescriptorSetLayout(device, layout, nullptr);
             vkDestroyDescriptorPool(device, pool, nullptr);
             sets.clear();
             sets.resize(0);
