@@ -26,7 +26,12 @@ Renderer::Renderer()
 
 void Renderer::CreateGraph()
 {
-    p_graph = DATA::Graph::newGraph(app->GRAPH_MESHES, p_backend->d_device);
+    if(app->GRAPH_MESHES.size())
+        p_graph = DATA::Graph::newGraph(app->GRAPH_MESHES, p_backend->d_device);
+    else if(app->GRAPH_MODEL_PATH != "")
+        p_graph = DATA::Graph::newGraph(app->GRAPH_MODEL_PATH, p_backend->d_device);
+    else
+        throw std::runtime_error("ERROR: no graph information is set for renderer!");
     createGraphicsPipeline();
     createFramebuffers();
 }
