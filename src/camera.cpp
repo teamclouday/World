@@ -107,7 +107,7 @@ void Camera::ProcessMouseMovement(float xoffset, float yoffset, bool constrainPi
 void Camera::reset()
 {
     this->Position = this->PositionStarted;
-    this->Front = glm::vec3(0.0f, 0.0f, 1.0f);
+    this->Front = glm::vec3(0.0f, 0.0f, -1.0f);
     this->Yaw = YAW;
     this->Pitch = PITCH;
     this->MovementSpeed = SPEED;
