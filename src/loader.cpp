@@ -16,8 +16,9 @@ using namespace DATA;
 VkFormat findTinyGLTFImageFormat(tinygltf::Image& image);
 void unfoldTinyGLTFnodes(std::vector<tinygltf::Node>& output, tinygltf::Model& model, tinygltf::Node& parentNode);
 
-Graph::Graph(const std::string modelPath)
+Graph::Graph(const std::string modelPath, VkDevice backendDevice)
 {
+    d_device = backendDevice;
     std::string ext = FILES::get_file_extension(modelPath);
     if(ext == "gltf")
         loadModelGLTF(modelPath, false);
@@ -25,6 +26,10 @@ Graph::Graph(const std::string modelPath)
         loadModelGLTF(modelPath, true);
     else
         throw std::runtime_error("ERROR: unsupported model type for " + modelPath);
+    createIndiceBuffers();
+    createVertexBuffers();
+    createUniformBuffers();
+    createDescriptorSets();
 }
 
 // reference: https://github.com/syoyo/tinygltf/blob/master/examples/basic/main.cpp
@@ -84,7 +89,7 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
         uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(image.width, image.height)))) + 1;
 
     	newTexture->image = createTextureImage(static_cast<uint32_t>(image.width), static_cast<uint32_t>(image.height), mipLevels, imageFormat,
-    	    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stagingBuffer.buf);
+    	    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stagingBuffer.buf);
 
     	VkSamplerCreateInfo samplerInfo{};
 		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -114,6 +119,7 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "gltf model textures successfully loaded");}
 
     d_meshes.resize(0);
+    d_ubo_per_mesh.resize(0);
     const tinygltf::Scene& scene = model.scenes[model.defaultScene];
     for(int nodeID : scene.nodes)
     {
@@ -271,6 +277,26 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
                     newMesh.texture_emissive = d_unique_textures_int_map[info_emissive.index];
 
                 d_meshes.push_back(newMesh);
+
+                CameraUniform ubo{};
+                glm::mat4 model(1.0f);
+                if(nn.translation.size() == 3)
+                {
+                    glm::vec3 translation = glm::make_vec3(nn.translation.data());
+                    model = glm::translate(model, translation);
+                }
+                if(nn.rotation.size() == 4)
+                {
+                    glm::quat rotation = glm::make_quat(nn.rotation.data());
+                    model = glm::mat4(rotation) * model;
+                }
+                if(nn.scale.size() == 3)
+                {
+                    glm::vec3 scale = glm::make_vec3(nn.scale.data());
+                    model = glm::scale(model, scale);
+                }
+                ubo.model = model;
+                d_ubo_per_mesh.push_back(ubo);
             }
         }
     }

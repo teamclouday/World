@@ -7,6 +7,8 @@
 #include <Vulkan/Vulkan.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <vector>
 #include <string>
@@ -203,11 +205,11 @@ namespace DATA
             return newGraph;
         }
 
-        Graph(const std::string modelPath);
+        Graph(const std::string modelPath, VkDevice backendDevice);
 
-        static Graph* newGraph(const std::string modelPath)
+        static Graph* newGraph(const std::string modelPath, VkDevice backendDevice)
         {
-            Graph* newGraph = new Graph(modelPath);
+            Graph* newGraph = new Graph(modelPath, backendDevice);
             return newGraph;
         }
 
