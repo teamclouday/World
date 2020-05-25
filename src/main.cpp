@@ -59,7 +59,7 @@ int main()
     app->RENDER_CLEAR_VALUES = {0.1f, 0.1f, 0.1f, 1.0f};
     // set camera variables
     app->CAMERA_INIT_POS = glm::vec3(0.0f, 0.0f, 10.0f);
-    app->CAMERA_INIT_UP = glm::vec3(0.0f, -1.0f, 0.0f);
+    app->CAMERA_INIT_UP = glm::vec3(0.0f, 1.0f, 0.0f);
     app->CAMERA_SPEED = 1.0f;
     app->StartCamera();
 

@@ -150,7 +150,7 @@ static void glfw_mouse_pos_callback(GLFWwindow* window, double xpos, double ypos
     if(!myCamera) return;
     if(myCamera->mousePosUpdated)
     {
-        float xoffset = static_cast<float>(myCamera->mousePos[0] - xpos);
+        float xoffset = static_cast<float>(xpos - myCamera->mousePos[0]);
         float yoffset = static_cast<float>(ypos - myCamera->mousePos[1]);
         myCamera->update(app->CAMERA_SPEED, xoffset, yoffset);
     }

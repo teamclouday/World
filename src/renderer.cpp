@@ -334,9 +334,9 @@ void Renderer::createGraphicsPipeline()
 
     VkViewport viewport{};
 	viewport.x = 0.0f;
-	viewport.y = 0.0f;
+	viewport.y = (float)d_swap_chain_image_extent.height;
 	viewport.width = (float)d_swap_chain_image_extent.width;
-	viewport.height = (float)d_swap_chain_image_extent.height;
+	viewport.height = -(float)d_swap_chain_image_extent.height;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
@@ -358,7 +358,7 @@ void Renderer::createGraphicsPipeline()
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
