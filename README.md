@@ -1,5 +1,8 @@
 # World
-3D world rendering
+3D world rendering  
+
+Just want to learn Vulkan rendering  
+And study light, shadow, etc. with glsl shaders  
 
 ------
 
