@@ -7,7 +7,7 @@ layout (location = 2) in vec4 inTangent;
 layout (location = 3) in vec2 inCoord;
 layout (location = 4) in vec4 inColor;
 
-layout (location = 0) out vec3 fragColor;
+layout (location = 0) out vec4 fragColor;
 layout (location = 1) out vec2 fragCoord;
 
 layout (binding = 0) uniform CameraUniform
@@ -21,5 +21,5 @@ void main()
 {
 	gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
 	fragColor = inColor;
-	fragCoord = coord;
+	fragCoord = inCoord;
 }

@@ -5,7 +5,6 @@
 
 #include "base.hpp"
 #include "data.hpp"
-#include "model.hpp"
 #include "camera.hpp"
 #include "logging.hpp"
 
@@ -63,9 +62,8 @@ public:
     // parameters for renderer creating a graph
     std::vector<DATA::MeshInput> GRAPH_MESHES;
     DATA::ShaderSourceDetails GRAPH_SHADER_DETAILS;
-
-    // parameters for a graph
     glm::vec4 RENDER_CLEAR_VALUES = {1.0f, 1.0f, 1.0f, 1.0f};
+    std::string GRAPH_MODEL_PATH = "";
 
     // parameters for setting camera
     glm::vec3 CAMERA_INIT_POS = glm::vec3(2.0f, 2.0f, 2.0f);
