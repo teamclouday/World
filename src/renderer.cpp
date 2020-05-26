@@ -398,12 +398,17 @@ void Renderer::createGraphicsPipeline()
 	depthStencil.maxDepthBounds = 1.0f;
 	depthStencil.stencilTestEnable = VK_FALSE;
 
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pushConstantRange.size = sizeof(DATA::MeshConstantData);
+    pushConstantRange.offset = 0;
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
 	pipelineLayoutInfo.pSetLayouts = &p_graph->d_descriptor_layout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
     if (vkCreatePipelineLayout(p_backend->d_device, &pipelineLayoutInfo, nullptr, &d_pipeline_layout) != VK_SUCCESS)
 		throw std::runtime_error("ERROR: failed to create Vulkan pipeline layout!");
@@ -810,11 +815,30 @@ void Renderer::updateUniformBuffers(USER_UPDATE user_func)
 {
     for(size_t i = 0; i < d_swap_chain_images.size(); i++)
     {
-        user_func(p_graph->d_ubo_data[i], d_swap_chain_image_extent.width, d_swap_chain_image_extent.height);
+        user_func(p_graph->d_ubo_data, d_swap_chain_image_extent.width, d_swap_chain_image_extent.height);
 
         void* data;
         vkMapMemory(p_backend->d_device, p_graph->d_ubo_buffers[i].mem, 0, sizeof(DATA::CameraUniform), 0, &data);
-        memcpy(data, &p_graph->d_ubo_data[i], sizeof(DATA::CameraUniform));
+        memcpy(data, &p_graph->d_ubo_data, sizeof(DATA::CameraUniform));
         vkUnmapMemory(p_backend->d_device, p_graph->d_ubo_buffers[i].mem);
+
+        // update each node uniform
+	    for(auto& node : p_graph->d_nodes)
+	    {
+	    	DATA::NodeUniformData uniformData{};
+
+	    	glm::mat4 mat = node->transformMat;
+	    	DATA::Node* ptr = node->parentNode;
+	    	while(ptr)
+	    	{
+	    		mat = ptr->transformMat * mat;
+	    		ptr = ptr->parentNode;
+	    	}
+	    	uniformData.localTransformation = mat;
+
+            vkMapMemory(p_backend->d_device, p_graph->d_node_uniform_buffers[node->nodeID][i].mem, 0, sizeof(DATA::NodeUniformData), 0, &data);
+            memcpy(data, &uniformData, sizeof(DATA::NodeUniformData));
+            vkUnmapMemory(p_backend->d_device, p_graph->d_node_uniform_buffers[node->nodeID][i].mem);
+	    }
     }
 }

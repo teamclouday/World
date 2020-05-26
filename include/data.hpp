@@ -103,9 +103,16 @@ namespace DATA
 
     struct NodeUniformData
     {
-        glm::vec3 translation   = glm::vec3(0.0f);
-        glm::mat4 rotation      = glm::mat4(0.0f);
-        glm::vec3 scale         = glm::vec3(1.0f);
+        glm::mat4 localTransformation = glm::mat4(1.0f);
+    };
+
+    struct MeshConstantData
+    {
+        float hasBase       = 0.0f; // 0.0 means false
+        float hasRough      = 0.0f;
+        float hasNormal     = 0.0f;
+        float hasOcclusion  = 0.0f;
+        float hasEmissive   = 0.0f;
     };
 
     struct Image
@@ -160,18 +167,39 @@ namespace DATA
         std::string textureImagePath;
     };
 
-    struct Node
+    struct Mesh
     {
+        // for rendering
         uint32_t indiceStart;
         uint32_t indiceCount = 0;
         uint32_t vertexStart;
         uint32_t vertexCount = 0;
-        int texBase      = -1; // binding = 1
-        int texRough     = -1; // binding = 2
-        int texNormal    = -1; // binding = 3
-        int texOcclusion = -1; // binding = 4
-        int texEmissive  = -1; // binding = 5
-        int nodeID = -1; // for referencing descriptor set
+        // texture bindings
+        uint32_t texBase      = 0; // binding = 2
+        uint32_t texRough     = 0; // binding = 3
+        uint32_t texNormal    = 0; // binding = 4
+        uint32_t texOcclusion = 0; // binding = 5
+        uint32_t texEmissive  = 0; // binding = 6
+        // descriptor set reference
+        uint32_t meshID = 0; // for referencing descriptor set
+        uint32_t nodeID = 0; // for referencing the node
+    };
+
+    struct Node
+    {
+        uint32_t nodeID;
+        std::vector<uint32_t> meshIDs;
+        Node* parentNode = nullptr;
+        std::vector<Node*> childrenNodes;
+        glm::mat4 transformMat = glm::mat4(1.0f);
+        void destroy()
+        {
+            for(auto& ptr : childrenNodes)
+            {
+                ptr->destroy();
+                delete ptr;
+            }
+        }
     };
 
     class Graph
@@ -226,26 +254,31 @@ namespace DATA
         void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
         // copy buffer to buffer helper function
         void copyBufferToBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+        // initialize an empty texture
+        void initTextures();
 
         // model loading related functions
         // load model type gltf
         std::vector<GraphUserInput> loadModelGLTF(const std::string modelPath, bool binary);
 
     public:
-        std::vector<Node> d_meshes;
+        std::vector<Node*> d_nodes;
+        std::vector<Mesh*> d_meshes;
+        std::vector<MeshConstantData> d_mesh_constants; // size of d_meshes
+        std::vector<std::vector<Buffer>> d_node_uniform_buffers; // size of d_nodes * swap chain images
 
         std::vector<Texture> d_unique_textures;
 
-        std::vector<Buffer> d_ubo_buffers;
-        std::vector<CameraUniform> d_ubo_data;
+        std::vector<Buffer> d_ubo_buffers; // size of swap chain images
+        CameraUniform d_ubo_data;
         
         VkDescriptorSetLayout d_descriptor_layout;
         VkDescriptorPool d_descriptor_pool;
-        std::vector<std::vector<VkDescriptorSet>> d_descriptor_per_node;
-        std::vector<VkDescriptorSet> d_descriptor_ubo;
+        std::vector<std::vector<VkDescriptorSet>> d_descriptor_per_mesh;
+        std::vector<VkDescriptorSet> d_descriptor_ubo; // size of swap chain images
 
-        Buffer d_vertex_buffer;
-        Buffer d_indice_buffer;
+        Buffer d_vertex_buffer; // all vertex data
+        Buffer d_indice_buffer; // all indice data
         uint32_t d_indice_count = 0;
 
         std::vector<VkCommandBuffer> d_commands;

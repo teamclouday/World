@@ -17,9 +17,15 @@ layout (binding = 0) uniform CameraUniform
 	mat4 proj;
 } ubo;
 
+layout (binding = 1) uniform NodeUniform
+{
+	mat4 localPosition;
+} nodeData;
+
 void main()
 {
-	gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
+	vec4 localPos = nodeData.localPosition * vec4(inPosition, 1.0);
+	gl_Position = ubo.proj * ubo.view * ubo.model * localPos;
 	fragColor = inColor;
 	fragCoord = inCoord;
 }
