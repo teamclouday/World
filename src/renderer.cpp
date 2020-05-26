@@ -9,6 +9,10 @@ extern Application* app;
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <chrono>
+#include <thread>
+
+void limitFPS(std::chrono::time_point<std::chrono::system_clock>& prev, std::chrono::time_point<std::chrono::system_clock>& now, float MAX_FPS);
 
 using namespace BASE;
 
@@ -49,11 +53,14 @@ void Renderer::loop(USER_UPDATE user_func)
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "loop started");}
 
     p_graph->createRenderCommandBuffers();
+    auto tNow = std::chrono::system_clock::now();
+    auto tPrev = std::chrono::system_clock::now();
     while(!glfwWindowShouldClose(p_backend->p_window))
     {
         glfwPollEvents();
         if(myCamera) myCamera->update(app->CAMERA_SPEED, 0.0f, 0.0f);
         drawFrame(user_func);
+        limitFPS(tNow, tPrev, app->RENDER_MAX_FPS);
     }
 
     vkDeviceWaitIdle(p_backend->d_device);
@@ -896,4 +903,17 @@ void Renderer::updateUniformBuffers(USER_UPDATE user_func)
             vkUnmapMemory(p_backend->d_device, p_graph->d_node_uniform_buffers[node->nodeID][i].mem);
 	    }
     }
+}
+
+
+void limitFPS(std::chrono::time_point<std::chrono::system_clock>& prev, std::chrono::time_point<std::chrono::system_clock>& now, float MAX_FPS)
+{
+    now = std::chrono::system_clock::now();
+    auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(now - prev);
+    long SPF = static_cast<long>((1000 / MAX_FPS));
+    if(delta.count() < SPF)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(SPF - delta.count()));
+    }
+    prev = std::chrono::system_clock::now();
 }
