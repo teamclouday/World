@@ -65,7 +65,7 @@ public:
     bool BACKEND_ENABLE_VALIDATION = true;
 
     // parameters for renderer creating a graph
-    float RENDER_MAX_FPS = 144.0f;
+    double RENDER_MAX_FPS = 144.0f;
     glm::vec4 RENDER_CLEAR_VALUES = {1.0f, 1.0f, 1.0f, 1.0f};
     bool RENDER_ENABLE_DEPTH = true;
     bool RENDER_ENABLE_MSAA = false;

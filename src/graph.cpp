@@ -603,8 +603,6 @@ void Graph::createRenderCommandBuffers()
 		if (vkEndCommandBuffer(d_commands[i]) != VK_SUCCESS)
 			throw std::runtime_error("ERROR: failed to record Vulkan render command buffer!");
 	}
-
-    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan render command buffers created");}
 }
 
 void Graph::createTexturesFromPaths(const std::set<std::string> paths)

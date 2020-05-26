@@ -57,6 +57,7 @@ int main()
     app->RENDER_CLEAR_VALUES = {0.1f, 0.1f, 0.1f, 1.0f};
     app->RENDER_ENABLE_DEPTH = true;
     app->RENDER_ENABLE_MSAA = false;
+    app->RENDER_MAX_FPS = 300.0f;
     // set camera variables
     app->CAMERA_INIT_POS = glm::vec3(0.0f, 0.0f, 10.0f);
     app->CAMERA_ZOOM_SCALE = 0.01f;

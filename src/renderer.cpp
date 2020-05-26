@@ -12,7 +12,7 @@ extern Application* app;
 #include <chrono>
 #include <thread>
 
-void limitFPS(std::chrono::time_point<std::chrono::system_clock>& prev, std::chrono::time_point<std::chrono::system_clock>& now, float MAX_FPS);
+void limitFPS(double& prev, double& now, double MAX_SPF);
 
 using namespace BASE;
 
@@ -53,8 +53,9 @@ void Renderer::loop(USER_UPDATE user_func)
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "loop started");}
 
     p_graph->createRenderCommandBuffers();
-    auto tNow = std::chrono::system_clock::now();
-    auto tPrev = std::chrono::system_clock::now();
+    double tNow = glfwGetTime();
+    double tPrev = glfwGetTime();
+    double MAX_SPF = (1.0f * static_cast<double>(d_swap_chain_images.size())) / app->RENDER_MAX_FPS;
     while(!glfwWindowShouldClose(p_backend->p_window))
     {
         glfwPollEvents();
@@ -63,7 +64,7 @@ void Renderer::loop(USER_UPDATE user_func)
         // TODO: refresh part of the commands to save resources
         freeRenderCommandBuffers(p_graph->d_commands);
         p_graph->createRenderCommandBuffers();
-        limitFPS(tNow, tPrev, app->RENDER_MAX_FPS);
+        limitFPS(tNow, tPrev, MAX_SPF);
     }
 
     vkDeviceWaitIdle(p_backend->d_device);
@@ -923,14 +924,13 @@ void Renderer::updateUniformBuffers(USER_UPDATE user_func)
 }
 
 
-void limitFPS(std::chrono::time_point<std::chrono::system_clock>& prev, std::chrono::time_point<std::chrono::system_clock>& now, float MAX_FPS)
+void limitFPS(double& prev, double& now, double MAX_SPF)
 {
-    now = std::chrono::system_clock::now();
-    auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(now - prev);
-    long SPF = static_cast<long>((1000 / MAX_FPS));
-    if(delta.count() < SPF)
+    now = glfwGetTime();
+    double delta = now - prev;
+    if(delta < MAX_SPF)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(SPF - delta.count()));
+        std::this_thread::sleep_for(std::chrono::duration<double>(MAX_SPF - delta));
     }
-    prev = std::chrono::system_clock::now();
+    prev = glfwGetTime();
 }
