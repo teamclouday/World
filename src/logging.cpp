@@ -84,6 +84,9 @@ std::string Logger::convertMessage(Message& message)
     case LOG_OWNERS_GRAPH:
         owner = "graph";
         break;
+    case LOG_OWNERS_UI:
+        owner = "ui";
+        break;
     case LOG_OWNERS_USER:
         owner = "user";
         break;

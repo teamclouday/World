@@ -20,7 +20,7 @@ Renderer::Renderer()
 {
     p_backend = app->GetBackend();
     if(!p_backend)
-        throw std::runtime_error("ERROR: backend not initialized when using renderer!");
+        throw std::runtime_error("ERROR: cannot create renderer without backend!");
     createCommandPool();
     createSwapChain();
     if(app->RENDER_ENABLE_MSAA)
@@ -60,6 +60,9 @@ void Renderer::loop(USER_UPDATE user_func)
         glfwPollEvents();
         if(myCamera) myCamera->update(app->CAMERA_SPEED, 0.0f, 0.0f);
         drawFrame(user_func);
+        // TODO: refresh part of the commands to save resources
+        freeRenderCommandBuffers(p_graph->d_commands);
+        p_graph->createRenderCommandBuffers();
         limitFPS(tNow, tPrev, app->RENDER_MAX_FPS);
     }
 
@@ -143,6 +146,8 @@ Renderer::~Renderer()
     p_graph = nullptr;
 
     destroySwapChain();
+    vkDestroyCommandPool(p_backend->d_device, d_command_pool, nullptr);
+    vkDestroyCommandPool(p_backend->d_device, d_command_pool_single, nullptr);
 
     p_backend = nullptr;
 }
@@ -236,6 +241,7 @@ void Renderer::createRenderPass()
         depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     }
 
+    uint32_t attachmentCount = 0;
     VkAttachmentDescription colorAttachmentResolve{};
     if(app->RENDER_ENABLE_MSAA)
     {
@@ -250,16 +256,24 @@ void Renderer::createRenderPass()
     }
 
     VkAttachmentReference colorAttachmentRef{};
-	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.attachment = attachmentCount;
 	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	VkAttachmentReference depthAttachmentRef{};
-	depthAttachmentRef.attachment = 1;
-	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
     VkAttachmentReference colorAttachmentResolveRef{};
-    colorAttachmentResolveRef.attachment = 2;
-    colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    if(app->RENDER_ENABLE_MSAA)
+    {
+        attachmentCount += 1;
+        colorAttachmentResolveRef.attachment = attachmentCount;
+        colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+
+    VkAttachmentReference depthAttachmentRef{};
+    if(app->RENDER_ENABLE_DEPTH)
+    {
+        attachmentCount += 1;
+	    depthAttachmentRef.attachment = attachmentCount;
+	    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
 
 	VkSubpassDescription subpass{};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -269,8 +283,8 @@ void Renderer::createRenderPass()
     subpass.pResolveAttachments = (app->RENDER_ENABLE_MSAA) ? &colorAttachmentResolveRef : nullptr;
 
 	std::vector<VkAttachmentDescription> attachments = { colorAttachment };
-    if(app->RENDER_ENABLE_DEPTH) attachments.push_back(depthAttachment);
     if(app->RENDER_ENABLE_MSAA) attachments.push_back(colorAttachmentResolve);
+    if(app->RENDER_ENABLE_DEPTH) attachments.push_back(depthAttachment);
 
 	VkRenderPassCreateInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -395,7 +409,7 @@ void Renderer::createGraphicsPipeline()
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.rasterizationSamples = (app->RENDER_ENABLE_MSAA) ? d_msaa_sample_count : VK_SAMPLE_COUNT_1_BIT;
-	multisampling.minSampleShading = (app->RENDER_ENABLE_MSAA) ? 0.5f : 1.0f;
+	multisampling.minSampleShading = (app->RENDER_ENABLE_MSAA) ? 0.2f : 1.0f;
 	multisampling.pSampleMask = nullptr;
 	multisampling.alphaToCoverageEnable = VK_FALSE;
 	multisampling.alphaToOneEnable = VK_FALSE;
@@ -490,6 +504,8 @@ void Renderer::createCommandPool()
 
 	if (vkCreateCommandPool(p_backend->d_device, &poolInfo, nullptr, &d_command_pool) != VK_SUCCESS)
 		throw std::runtime_error("ERROR: failed to create Vulkan command pool!");
+    if (vkCreateCommandPool(p_backend->d_device, &poolInfo, nullptr, &d_command_pool_single) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to create Vulkan command pool!");
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan command pool created");}
 }
 
@@ -539,8 +555,8 @@ void Renderer::createFramebuffers()
     {
         std::vector<VkImageView> attachments;
         if(app->RENDER_ENABLE_MSAA) attachments.push_back(d_color_image.view);
-        if(app->RENDER_ENABLE_DEPTH) attachments.push_back(d_depth_image.view);
         attachments.push_back(d_swap_chain_image_views[i]);
+        if(app->RENDER_ENABLE_DEPTH) attachments.push_back(d_depth_image.view);
         VkFramebufferCreateInfo framebufferInfo{};
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferInfo.renderPass = d_render_pass;
@@ -768,7 +784,7 @@ VkCommandBuffer Renderer::startSingleCommand()
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = d_command_pool;
+    allocInfo.commandPool = d_command_pool_single;
     allocInfo.commandBufferCount = 1;
 
     VkCommandBuffer commandBuffer;
@@ -795,7 +811,7 @@ void Renderer::stopSingleCommand(VkCommandBuffer& commandBuffer)
     vkQueueSubmit(p_backend->d_graphics_queue, 1, &submitInfo, VK_NULL_HANDLE);
     vkQueueWaitIdle(p_backend->d_graphics_queue);
 
-    vkFreeCommandBuffers(p_backend->d_device, d_command_pool, 1, &commandBuffer);
+    vkFreeCommandBuffers(p_backend->d_device, d_command_pool_single, 1, &commandBuffer);
 }
 
 std::vector<VkCommandBuffer> Renderer::allocateRenderCommandBuffers(size_t size)

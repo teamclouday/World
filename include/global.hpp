@@ -6,6 +6,7 @@
 #include "base.hpp"
 #include "data.hpp"
 #include "camera.hpp"
+#include "ui.hpp"
 #include "logging.hpp"
 
 #define APP_EXIT_SUCCESS    0
@@ -32,6 +33,8 @@ public:
         if(p_camera)
             delete p_camera;
         p_camera = nullptr;
+        if(p_ui)
+            delete p_ui;
         if(p_renderer)
             delete p_renderer;
         p_renderer = nullptr;
@@ -43,6 +46,7 @@ public:
     void StartCamera(){p_camera = new UTILS::Camera(CAMERA_INIT_POS, CAMERA_INIT_UP);}
     void StartBackend(){p_backend = new BASE::Backend();}
     void StartRenderer(){p_renderer = new BASE::Renderer();}
+    void StartUI(){p_ui = new UTILS::UI();}
     void LoadGraph(){if(p_renderer) p_renderer->CreateGraph();}
     void Loop(USER_UPDATE user_func){if(p_renderer) p_renderer->loop(user_func);}
 
@@ -50,6 +54,7 @@ public:
     BASE::Backend* GetBackend(){return p_backend;}
     BASE::Renderer* GetRenderer(){return p_renderer;}
     UTILS::Camera* GetCamera(){return p_camera;}
+    UTILS::UI* GetUI(){return p_ui;}
 
 public:
     // parameters for Backend
@@ -89,4 +94,5 @@ private:
     BASE::Backend* p_backend = nullptr;
     BASE::Renderer* p_renderer = nullptr;
     UTILS::Camera* p_camera = nullptr;
+    UTILS::UI* p_ui = nullptr;
 };

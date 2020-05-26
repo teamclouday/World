@@ -1,5 +1,6 @@
 #include "data.hpp"
 #include "files.hpp"
+#include "ui.hpp"
 
 #include "global.hpp"
 extern Application* app;
@@ -526,6 +527,7 @@ void Graph::createRenderCommandBuffers()
 {
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_GRAPH;
+	UTILS::UI* myUI = app->GetUI();
 
     size_t swapChainImagesCount = app->GetRenderer()->getSwapChainImagesCount();
     d_commands = app->GetRenderer()->allocateRenderCommandBuffers(swapChainImagesCount);
@@ -548,6 +550,14 @@ void Graph::createRenderCommandBuffers()
 			app->RENDER_CLEAR_VALUES[0], app->RENDER_CLEAR_VALUES[1],
 			app->RENDER_CLEAR_VALUES[2], app->RENDER_CLEAR_VALUES[3]
 		};
+		if(app->RENDER_ENABLE_MSAA)
+		{
+			clearValues.resize(clearValues.size()+1);
+			clearValues[clearValues.size()-1].color = {
+				app->RENDER_CLEAR_VALUES[0], app->RENDER_CLEAR_VALUES[1],
+				app->RENDER_CLEAR_VALUES[2], app->RENDER_CLEAR_VALUES[3]
+			};
+		}
 		if(app->RENDER_ENABLE_DEPTH)
 		{
 			clearValues.resize(clearValues.size()+1);
@@ -586,6 +596,9 @@ void Graph::createRenderCommandBuffers()
 					vkCmdDraw(d_commands[i], mesh->vertexCount, 1, mesh->vertexStart, 0);
 			}
 		}
+
+		if(myUI) ImGui_ImplVulkan_RenderDrawData(myUI->recordUI(), d_commands[i]);
+
 		vkCmdEndRenderPass(d_commands[i]);
 		if (vkEndCommandBuffer(d_commands[i]) != VK_SUCCESS)
 			throw std::runtime_error("ERROR: failed to record Vulkan render command buffer!");
@@ -906,7 +919,6 @@ void Graph::copyBufferToBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceS
 
 void Graph::onFrameSizeChangeStart()
 {
-	app->GetRenderer()->freeRenderCommandBuffers(d_commands);
 	for(auto& buffer : d_ubo_buffers)
 		buffer.destroy(d_device);
 	for(auto& buffers : d_node_uniform_buffers)
@@ -920,5 +932,4 @@ void Graph::onFrameSizeChangeEnd()
 {
 	createUniformBuffers();
     createDescriptorSets();
-	createRenderCommandBuffers();
 }

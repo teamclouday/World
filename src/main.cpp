@@ -56,7 +56,7 @@ int main()
     // set renderer variables
     app->RENDER_CLEAR_VALUES = {0.1f, 0.1f, 0.1f, 1.0f};
     app->RENDER_ENABLE_DEPTH = true;
-    app->RENDER_ENABLE_MSAA = true;
+    app->RENDER_ENABLE_MSAA = false;
     // set camera variables
     app->CAMERA_INIT_POS = glm::vec3(0.0f, 0.0f, 10.0f);
     app->CAMERA_ZOOM_SCALE = 0.01f;
@@ -69,6 +69,7 @@ int main()
     {
         app->StartBackend();
         app->StartRenderer();
+        app->StartUI();
         app->LoadGraph();
         app->Loop(update_uniform);
     }

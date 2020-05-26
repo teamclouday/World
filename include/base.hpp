@@ -12,6 +12,7 @@
 
 #include <Vulkan/Vulkan.h>
 
+#define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -22,6 +23,7 @@
 #include <array>
 
 #include "data.hpp"
+#include "ui.hpp"
 
 // user-defined uniform update function
 typedef void USER_UPDATE (DATA::CameraUniform& data, uint32_t width, uint32_t height);
@@ -49,6 +51,7 @@ namespace BASE
     {
     friend class Renderer;
     friend class DATA::Graph;
+    friend class UTILS::UI;
     public:
         Backend();
         ~Backend();
@@ -116,6 +119,7 @@ namespace BASE
 
     class Renderer
     {
+    friend class UTILS::UI;
     public:
         Renderer();
         ~Renderer();
@@ -212,6 +216,7 @@ namespace BASE
         VkPipelineLayout d_pipeline_layout;
         // command pool
         VkCommandPool d_command_pool;
+        VkCommandPool d_command_pool_single;
         // synchronization objects
         const size_t MAX_FRAMES_IN_FLIGHT = 2;
         size_t CURRENT_FRAME = 0;

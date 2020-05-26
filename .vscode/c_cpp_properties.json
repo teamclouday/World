@@ -7,6 +7,7 @@
                 "${workspaceFolder}/external/glfw/include",
                 "${workspaceFolder}/external/glm/include",
                 "${workspaceFolder}/external/tinygltf",
+                "${workspaceFolder}/external/imgui/include",
                 "${VK_SDK_PATH}/Include"
             ],
             "defines": [
