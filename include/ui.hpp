@@ -8,7 +8,7 @@
 #include <imgui_impl_vulkan.h>
 
 #include <GLFW/glfw3.h>
-#include <Vulkan/Vulkan.h>
+#include <vulkan/vulkan.h>
 
 #include <vector>
 

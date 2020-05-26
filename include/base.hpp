@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <Vulkan/Vulkan.h>
+#include <vulkan/vulkan.h>
 
 #define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN

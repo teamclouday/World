@@ -18,6 +18,22 @@
             "windowsSdkVersion": "10.0.18362.0",
             "intelliSenseMode": "msvc-x86",
             "cppStandard": "c++14"
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/external/glfw/include",
+                "${workspaceFolder}/external/glm/include",
+                "${workspaceFolder}/external/tinygltf",
+                "${workspaceFolder}/external/imgui/include",
+                "/usr/include"
+            ],
+            "defines": [
+                "_DEBUG"
+            ],
+            "intelliSenseMode": "gcc-x86",
+            "cppStandard": "c++14"
         }
     ],
     "version": 4

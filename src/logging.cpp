@@ -46,7 +46,8 @@ void Logger::DumpToFile(std::string& filePath)
     {
         data << convertMessage(d_messages[i]) << "\n";
     }
-    write_to_file(filePath, data.str());
+    std::string dataStr = data.str();
+    write_to_file(filePath, dataStr);
 }
 
 // TODO: store tmp local log before poping

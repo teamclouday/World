@@ -109,7 +109,7 @@ void Graph::convertInputMeshes(std::vector<GraphUserInput>& meshes)
 	d_meshes.resize(0);
 	d_mesh_constants.resize(0);
 	Node* newNode = new Node;
-	std::vector<size_t> meshIDs;
+	std::vector<uint32_t> meshIDs;
 	for(auto& mesh : meshes)
 	{
 		meshIDs.push_back(meshCount);

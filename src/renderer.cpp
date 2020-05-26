@@ -325,7 +325,8 @@ void Renderer::createGraphicsPipeline()
 
     for(size_t i = 0; i < shaderSourceDetails.names.size(); i++)
     {
-        auto shaderCode = FILES::read_bytes_from_file(path + shaderSourceDetails.names[i]);
+        std::string filePath = path + shaderSourceDetails.names[i];
+        auto shaderCode = FILES::read_bytes_from_file(filePath);
         VkShaderModule shaderModule = createShaderModule(shaderCode, shaderSourceDetails.names[i]);
         shaderModules.push_back(shaderModule);
 

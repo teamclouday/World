@@ -11,11 +11,12 @@ And study light, shadow, etc. with glsl shaders
 * cmake tools installed  
 * visual studio compiler installed if Windows  
 * glfw3 installed if Linux  
+* shaderc installed if Linux  
 
 ### How to build
 
 On Windows, run ```build.bat```  
-
+On Linux, run ```build.sh```  
 
 ------
 
