@@ -24,7 +24,7 @@
 #include "data.hpp"
 
 // user-defined uniform update function
-typedef void USER_UPDATE (DATA::CameraUniform& data);
+typedef void USER_UPDATE (DATA::CameraUniform& data, uint32_t width, uint32_t height);
 
 namespace BASE
 {

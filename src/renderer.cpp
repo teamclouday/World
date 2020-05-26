@@ -88,11 +88,8 @@ void Renderer::drawFrame(USER_UPDATE user_func)
 	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
 
-    size_t commandBuffersCount = p_graph->d_meshes.size();
-    std::vector<VkCommandBuffer> commandBuffers(p_graph->d_commands.begin() + imageIndex * commandBuffersCount,
-        p_graph->d_commands.begin() + (imageIndex + 1) * commandBuffersCount);
-	submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffersCount);
-	submitInfo.pCommandBuffers = commandBuffers.data();
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &p_graph->d_commands[imageIndex];
 
 	VkSemaphore signalSemaphores[] = { d_semaphore_render[CURRENT_FRAME] };
 	submitInfo.signalSemaphoreCount = 1;
@@ -404,7 +401,7 @@ void Renderer::createGraphicsPipeline()
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &p_graph->d_desctiptor_sets.layout;
+	pipelineLayoutInfo.pSetLayouts = &p_graph->d_descriptor_layout;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -811,13 +808,13 @@ void Renderer::recreateSwapChain()
 
 void Renderer::updateUniformBuffers(USER_UPDATE user_func)
 {
-    for(size_t i = 0; i < p_graph->d_ubo_buffers.size(); i++)
+    for(size_t i = 0; i < d_swap_chain_images.size(); i++)
     {
-        user_func(p_graph->d_ubo_per_mesh[i]);
+        user_func(p_graph->d_ubo_data[i], d_swap_chain_image_extent.width, d_swap_chain_image_extent.height);
 
         void* data;
         vkMapMemory(p_backend->d_device, p_graph->d_ubo_buffers[i].mem, 0, sizeof(DATA::CameraUniform), 0, &data);
-        memcpy(data, &p_graph->d_ubo_per_mesh[i], sizeof(DATA::CameraUniform));
+        memcpy(data, &p_graph->d_ubo_data[i], sizeof(DATA::CameraUniform));
         vkUnmapMemory(p_backend->d_device, p_graph->d_ubo_buffers[i].mem);
     }
 }

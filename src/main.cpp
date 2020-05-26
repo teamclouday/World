@@ -5,11 +5,8 @@ Application* app = new Application();
 #include <iostream>
 
 // user defined camera uniform update function
-void update_uniform(DATA::CameraUniform& data)
+void update_uniform(DATA::CameraUniform& data, uint32_t width, uint32_t height)
 {
-    BASE::Renderer* p_renderer = app->GetRenderer();
-    uint32_t width, height;
-    p_renderer->getSwapChainImageExtent(width, height);
     data.view = app->GetCamera()->GetViewMatrix();
     data.proj = glm::perspective(glm::radians(60.0f), static_cast<float>(width) / static_cast<float>(height), 0.1f, 1000.0f);
 }
@@ -35,15 +32,15 @@ int main()
 #if 0
     std::vector<DATA::Vertex> vertices = {
         // position           normal tangent  coord         color
-        {{-0.5f, -0.5f, 0.0f}, {},    {},     {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-		{{ 0.5f, -0.5f, 0.0f}, {},    {},     {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-		{{ 0.5f,  0.5f, 0.0f}, {},    {},     {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
-		{{-0.5f,  0.5f, 0.0f}, {},    {},     {0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-0.5f, -0.5f, 0.0f}, {},    {},     {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+		{{ 0.5f, -0.5f, 0.0f}, {},    {},     {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+		{{ 0.5f,  0.5f, 0.0f}, {},    {},     {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+		{{-0.5f,  0.5f, 0.0f}, {},    {},     {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
 
-        {{-0.5f, -0.5f, 1.0f}, {},    {},     {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-		{{ 0.5f, -0.5f, 1.0f}, {},    {},     {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-		{{ 0.5f,  0.5f, 1.0f}, {},    {},     {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
-		{{-0.5f,  0.5f, 1.0f}, {},    {},     {0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-0.5f, -0.5f, 1.0f}, {},    {},     {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+		{{ 0.5f, -0.5f, 1.0f}, {},    {},     {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+		{{ 0.5f,  0.5f, 1.0f}, {},    {},     {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+		{{-0.5f,  0.5f, 1.0f}, {},    {},     {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
     };
     std::vector<uint32_t> indices = {
         0, 1, 2, 2, 3, 0,
@@ -59,11 +56,10 @@ int main()
     app->RENDER_CLEAR_VALUES = {0.1f, 0.1f, 0.1f, 1.0f};
     // set camera variables
     app->CAMERA_INIT_POS = glm::vec3(0.0f, 0.0f, 10.0f);
-    app->CAMERA_INIT_UP = glm::vec3(0.0f, 1.0f, 0.0f);
     app->CAMERA_SPEED = 1.0f;
     app->StartCamera();
 
-    app->GRAPH_MODEL_PATH = "resources/vulkancube.glb";
+    app->GRAPH_MODEL_PATH = "resources/DamagedHelmet.gltf";
 
     try
     {

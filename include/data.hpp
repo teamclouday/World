@@ -96,9 +96,16 @@ namespace DATA
 
     struct CameraUniform
     {
-        glm::mat4 model;
+        glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 view;
         glm::mat4 proj;
+    };
+
+    struct NodeUniformData
+    {
+        glm::vec3 translation   = glm::vec3(0.0f);
+        glm::mat4 rotation      = glm::mat4(0.0f);
+        glm::vec3 scale         = glm::vec3(1.0f);
     };
 
     struct Image
@@ -132,23 +139,6 @@ namespace DATA
         }
     };
 
-    struct DescriptorSet
-    {
-        VkDescriptorPool pool;
-        VkDescriptorSetLayout layout;
-        std::vector<VkDescriptorSet> sets;
-        bool allset = false;
-        void destroy(VkDevice device)
-        {
-            if(!allset) return;
-            vkDestroyDescriptorSetLayout(device, layout, nullptr);
-            vkDestroyDescriptorPool(device, pool, nullptr);
-            sets.clear();
-            sets.resize(0);
-            allset = false;
-        }
-    };
-
     struct Texture
     {
         Image image;
@@ -163,42 +153,34 @@ namespace DATA
         }
     };
 
-    struct Mesh
-    {
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
-        Texture* texture_base       = nullptr; // Binding = 1 // 0 is taken by uniform buffer
-        Texture* texture_rough      = nullptr; // Binding = 2
-        Texture* texture_normal     = nullptr; // Binding = 3
-        Texture* texture_occlusion  = nullptr; // Binding = 4
-        Texture* texture_emissive   = nullptr; // Binding = 5
-        bool allset = false;
-        void destroy(VkDevice device)
-        {
-            if(!allset) return;
-            vertices.clear();
-            vertices.resize(0);
-            indices.clear();
-            indices.resize(0);
-            // texture.destroy(device); // texture resources should not be managed by mesh
-            allset = false;
-        }
-    };
-
-    struct MeshInput
+    struct GraphUserInput
     {
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
         std::string textureImagePath;
     };
 
+    struct Node
+    {
+        uint32_t indiceStart;
+        uint32_t indiceCount = 0;
+        uint32_t vertexStart;
+        uint32_t vertexCount = 0;
+        int texBase      = -1; // binding = 1
+        int texRough     = -1; // binding = 2
+        int texNormal    = -1; // binding = 3
+        int texOcclusion = -1; // binding = 4
+        int texEmissive  = -1; // binding = 5
+        int nodeID = -1; // for referencing descriptor set
+    };
+
     class Graph
     {
     public:
-        Graph(std::vector<MeshInput>& meshes, VkDevice backendDevice);
+        Graph(std::vector<GraphUserInput>& meshes, VkDevice backendDevice);
         ~Graph();
 
-        static Graph* newGraph(std::vector<MeshInput>& meshes, VkDevice backendDevice)
+        static Graph* newGraph(std::vector<GraphUserInput>& meshes, VkDevice backendDevice)
         {
             Graph* newGraph = new Graph(meshes, backendDevice);
             return newGraph;
@@ -220,15 +202,15 @@ namespace DATA
 
     private:
         // process input meshes
-        void convertInputMeshes(std::vector<MeshInput>& meshes);
+        void convertInputMeshes(std::vector<GraphUserInput>& meshes);
         // create uniform buffers for each mesh
         void createUniformBuffers();
         // create descriptor set related variables
         void createDescriptorSets();
         // vertex buffers
-        void createVertexBuffers();
+        void createVertexBuffers(std::vector<GraphUserInput>& meshes);
         // indice buffers
-        void createIndiceBuffers();
+        void createIndiceBuffers(std::vector<GraphUserInput>& meshes);
         // create textures from image paths
         void createTexturesFromPaths(const std::set<std::string> paths);
         // create buffer helper function
@@ -247,21 +229,24 @@ namespace DATA
 
         // model loading related functions
         // load model type gltf
-        void loadModelGLTF(const std::string modelPath, bool binary);
+        std::vector<GraphUserInput> loadModelGLTF(const std::string modelPath, bool binary);
 
     public:
-        std::vector<Mesh> d_meshes;
-    
-        std::map<std::string, Texture*> d_unique_textures_string_map;
-        std::map<int, Texture*> d_unique_textures_int_map;
-    
-        DescriptorSet d_desctiptor_sets;
+        std::vector<Node> d_meshes;
 
-        std::vector<CameraUniform> d_ubo_per_mesh;
+        std::vector<Texture> d_unique_textures;
+
         std::vector<Buffer> d_ubo_buffers;
+        std::vector<CameraUniform> d_ubo_data;
         
-        std::vector<Buffer> d_vertex_buffers;
-        std::vector<Buffer> d_indice_buffers;
+        VkDescriptorSetLayout d_descriptor_layout;
+        VkDescriptorPool d_descriptor_pool;
+        std::vector<std::vector<VkDescriptorSet>> d_descriptor_per_node;
+        std::vector<VkDescriptorSet> d_descriptor_ubo;
+
+        Buffer d_vertex_buffer;
+        Buffer d_indice_buffer;
+        uint32_t d_indice_count = 0;
 
         std::vector<VkCommandBuffer> d_commands;
 

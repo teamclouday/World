@@ -21,4 +21,4 @@ On Windows, run ```build.bat```
 
 ### References
 * [Vulkan Tutorial](https://vulkan-tutorial.com/)  
-
+* [Vulkan-glTF-PBR](https://github.com/SaschaWillems/Vulkan-glTF-PBR/)  

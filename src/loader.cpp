@@ -19,22 +19,23 @@ void unfoldTinyGLTFnodes(std::vector<tinygltf::Node>& output, tinygltf::Model& m
 Graph::Graph(const std::string modelPath, VkDevice backendDevice)
 {
     d_device = backendDevice;
+    std::vector<GraphUserInput> meshes;
     std::string ext = FILES::get_file_extension(modelPath);
     if(ext == "gltf")
-        loadModelGLTF(modelPath, false);
+        meshes = loadModelGLTF(modelPath, false);
     else if(ext == "glb")
-        loadModelGLTF(modelPath, true);
+        meshes = loadModelGLTF(modelPath, true);
     else
         throw std::runtime_error("ERROR: unsupported model type for " + modelPath);
-    createIndiceBuffers();
-    createVertexBuffers();
+    createVertexBuffers(meshes);
+    createIndiceBuffers(meshes);
     createUniformBuffers();
     createDescriptorSets();
 }
 
 // reference: https://github.com/syoyo/tinygltf/blob/master/examples/basic/main.cpp
 // reference: https://github.com/SaschaWillems/Vulkan-glTF-PBR/blob/master/base/VulkanglTFModel.hpp
-void Graph::loadModelGLTF(const std::string modelPath, bool binary)
+std::vector<GraphUserInput> Graph::loadModelGLTF(const std::string modelPath, bool binary)
 {
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_GRAPH;
@@ -66,13 +67,13 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
     for(size_t i = 0; i < model.textures.size(); i++)
     {
         tinygltf::Texture& tex = model.textures[i];
-        // TODO: Add support for sampler as well
+        // TODO: Add support for sampler information as well
         if(tex.source < 0) continue;
         tinygltf::Image& image = model.images[tex.source];
         std::vector<unsigned char>& pixels = image.image;
         if(pixels.empty()) continue;
 
-        Texture* newTexture = new Texture;
+        Texture newTexture;
 
         VkDeviceSize imageSize = (uint64_t)image.height * (uint64_t)image.width * image.component;
 
@@ -88,7 +89,7 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
 
         uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(image.width, image.height)))) + 1;
 
-    	newTexture->image = createTextureImage(static_cast<uint32_t>(image.width), static_cast<uint32_t>(image.height), mipLevels, imageFormat,
+    	newTexture.image = createTextureImage(static_cast<uint32_t>(image.width), static_cast<uint32_t>(image.height), mipLevels, imageFormat,
     	    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stagingBuffer.buf);
 
     	VkSamplerCreateInfo samplerInfo{};
@@ -109,17 +110,22 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
 		samplerInfo.minLod = 0.0f;
 		samplerInfo.maxLod = static_cast<float>(mipLevels);
 
-		if (vkCreateSampler(d_device, &samplerInfo, nullptr, &newTexture->sampler) != VK_SUCCESS)
+		if (vkCreateSampler(d_device, &samplerInfo, nullptr, &newTexture.sampler) != VK_SUCCESS)
 			throw std::runtime_error("ERROR: failed to create Vulkan texture sampler!");
 
-		newTexture->allset = true;
+		newTexture.allset = true;
     	stagingBuffer.destroy(d_device);
-        d_unique_textures_int_map[static_cast<int>(i)] = newTexture;
+        d_unique_textures.push_back(newTexture);
     }
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "gltf model textures successfully loaded");}
 
     d_meshes.resize(0);
-    d_ubo_per_mesh.resize(0);
+    std::vector<GraphUserInput> returned_meshes;
+    uint32_t vertex_count = 0;
+    uint32_t indice_count = 0;
+    uint32_t node_count = 0;
+
+    returned_meshes.resize(0);
     const tinygltf::Scene& scene = model.scenes[model.defaultScene];
     for(int nodeID : scene.nodes)
     {
@@ -133,7 +139,8 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
             tinygltf::Mesh& mesh = model.meshes[nn.mesh];
             for(size_t i = 0; i < mesh.primitives.size(); i++)
             {
-                Mesh newMesh{};
+                GraphUserInput newMesh;
+                Node newMeshNode;
                 std::vector<Vertex> vertices;
                 vertices.resize(0);
                 std::vector<uint32_t> indices;
@@ -195,7 +202,8 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
                 }
 
                 // TODO: add joints and weight for skeleton in the future
-                for (size_t v = 0; v < posAccessor.count; v++) {
+                for (size_t v = 0; v < posAccessor.count; v++)
+                {
 					Vertex vert{};
 					vert.pos = glm::make_vec3(&bufferPos[v * posByteStride]);
 					vert.normal = glm::normalize(glm::vec3(bufferNormal ? glm::make_vec3(&bufferNormal[v * normByteStride]) : glm::vec3(0.0f)));
@@ -211,6 +219,9 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
 					vertices.push_back(vert);
 				}
                 newMesh.vertices = vertices;
+                newMeshNode.vertexCount = vertices.size();
+                newMeshNode.vertexStart = vertex_count;
+                vertex_count += vertices.size();
 
                 // next try to find indices
                 if(primitive.indices > -1)
@@ -250,6 +261,12 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
                     }
                 }
                 newMesh.indices = indices;
+                if(indices.size())
+                {
+                    newMeshNode.indiceCount = indices.size();
+                    newMeshNode.indiceStart = indice_count;
+                    indice_count += indices.size();
+                }
 
                 // next try to get the corresponding texture
                 // TODO: add support for emissive factor
@@ -262,46 +279,55 @@ void Graph::loadModelGLTF(const std::string modelPath, bool binary)
                 tinygltf::TextureInfo& info_emissive = material.emissiveTexture;
 
                 if(info_base.index >= 0 && info_base.index < (int)model.textures.size())
-                    newMesh.texture_base = d_unique_textures_int_map[info_base.index];
+                    newMeshNode.texBase = info_base.index;
 
                 if(info_rough.index >= 0 && info_rough.index < (int)model.textures.size())
-                    newMesh.texture_rough = d_unique_textures_int_map[info_rough.index];
+                    newMeshNode.texRough = info_rough.index;
 
                 if(info_normal.index >= 0 && info_normal.index < (int)model.textures.size())
-                    newMesh.texture_normal = d_unique_textures_int_map[info_normal.index];
+                    newMeshNode.texNormal = info_normal.index;
 
                 if(info_occlusion.index >= 0 && info_occlusion.index < (int)model.textures.size())
-                    newMesh.texture_occlusion = d_unique_textures_int_map[info_occlusion.index];
+                    newMeshNode.texOcclusion = info_occlusion.index;
 
                 if(info_emissive.index >= 0 && info_emissive.index < (int)model.textures.size())
-                    newMesh.texture_emissive = d_unique_textures_int_map[info_emissive.index];
+                    newMeshNode.texEmissive = info_emissive.index;
 
-                d_meshes.push_back(newMesh);
+                newMesh.textureImagePath = "";
+                newMeshNode.nodeID = node_count;
+                returned_meshes.push_back(newMesh);
+                d_meshes.push_back(newMeshNode);
 
-                CameraUniform ubo{};
-                glm::mat4 model(1.0f);
-                if(nn.translation.size() == 3)
-                {
-                    glm::vec3 translation = glm::make_vec3(nn.translation.data());
-                    model = glm::translate(model, translation);
-                }
-                if(nn.rotation.size() == 4)
-                {
-                    glm::quat rotation = glm::make_quat(nn.rotation.data());
-                    model = glm::mat4(rotation) * model;
-                }
-                if(nn.scale.size() == 3)
-                {
-                    glm::vec3 scale = glm::make_vec3(nn.scale.data());
-                    model = glm::scale(model, scale);
-                }
-                ubo.model = model;
-                d_ubo_per_mesh.push_back(ubo);
+                // TODO: add support for local translation in the future
+
+                // CameraUniform ubo{};
+                // glm::mat4 model(1.0f);
+                // if(nn.translation.size() == 3)
+                // {
+                //     glm::vec3 translation = glm::make_vec3(nn.translation.data());
+                //     model = glm::translate(model, translation);
+                // }
+                // if(nn.rotation.size() == 4)
+                // {
+                //     glm::quat rotation = glm::make_quat(nn.rotation.data());
+                //     model = glm::mat4(rotation) * model;
+                // }
+                // if(nn.scale.size() == 3)
+                // {
+                //     glm::vec3 scale = glm::make_vec3(nn.scale.data());
+                //     model = glm::scale(model, scale);
+                // }
+                // ubo.model = model;
+                // d_ubo_per_mesh.push_back(ubo);
+
+                node_count += 1;
             }
         }
     }
 
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "gltf model successfully loaded");}
+
+    return returned_meshes;
 }
 
 
