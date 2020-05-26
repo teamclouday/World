@@ -9,6 +9,7 @@ void update_uniform(DATA::CameraUniform& data, uint32_t width, uint32_t height)
 {
     data.view = app->GetCamera()->GetViewMatrix();
     data.proj = glm::perspective(glm::radians(60.0f), static_cast<float>(width) / static_cast<float>(height), 0.1f, 1000.0f);
+    data.model = glm::scale(glm::mat4(1.0f), glm::vec3(app->GetCamera()->mv_zoom));
 }
 
 int main()
@@ -56,10 +57,11 @@ int main()
     app->RENDER_CLEAR_VALUES = {0.1f, 0.1f, 0.1f, 1.0f};
     // set camera variables
     app->CAMERA_INIT_POS = glm::vec3(0.0f, 0.0f, 10.0f);
+    app->CAMERA_ZOOM_SCALE = 0.01f;
     app->CAMERA_SPEED = 1.0f;
     app->StartCamera();
 
-    app->GRAPH_MODEL_PATH = "resources/DamagedHelmet.gltf";
+    app->GRAPH_MODEL_PATH = "resources/wasteland_sword/scene.gltf";
 
     try
     {

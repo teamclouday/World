@@ -159,6 +159,21 @@ static void glfw_mouse_pos_callback(GLFWwindow* window, double xpos, double ypos
     if(!myCamera->mousePosUpdated) myCamera->mousePosUpdated = true;
 }
 
+static void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    UTILS::Camera* myCamera = app->GetCamera();
+    if(!myCamera) return;
+    if(myCamera->focus)
+    {
+        if(yoffset > 0)
+            myCamera->mv_zoom += app->CAMERA_ZOOM_SCALE;
+        else if(yoffset < 0)
+            myCamera->mv_zoom -= app->CAMERA_ZOOM_SCALE;
+        myCamera->mv_zoom = myCamera->mv_zoom > 0.0f ? myCamera->mv_zoom : app->CAMERA_ZOOM_SCALE;
+        myCamera->mv_zoom = myCamera->mv_zoom < 5.0f ? myCamera->mv_zoom : 5.0f;
+    }
+}
+
 using namespace BASE;
 
 Backend::Backend()
@@ -213,6 +228,7 @@ void Backend::createWindow()
     glfwSetKeyCallback(p_window, glfw_key_callback);
     glfwSetMouseButtonCallback(p_window, glfw_mouse_button_callback);
     glfwSetCursorPosCallback(p_window, glfw_mouse_pos_callback);
+    glfwSetScrollCallback(p_window, glfw_scroll_callback);
 }
 
 void Backend::createInstance()
