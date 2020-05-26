@@ -224,6 +224,8 @@ namespace DATA
 
         // create render command buffers
         void createRenderCommandBuffers();
+        // update render command buffer by id
+        void updateRenderCommandBuffer(uint32_t imageID);
         // frame size change callback
         void onFrameSizeChangeStart();
         void onFrameSizeChangeEnd();
@@ -266,6 +268,7 @@ namespace DATA
         std::vector<Mesh*> d_meshes;
         std::vector<MeshConstantData> d_mesh_constants; // size of d_meshes
         std::vector<std::vector<Buffer>> d_node_uniform_buffers; // size of d_nodes * swap chain images
+        bool d_node_uniform_buffers_need_update = true;
 
         std::vector<Texture> d_unique_textures;
 

@@ -49,7 +49,7 @@ ImDrawData* UI::drawMenu()
 
     {
         ImGui::Begin("FPS");
-        ImGui::Text("Current FPS: %.2f", ImGui::GetIO().Framerate);
+        ImGui::Text("Current FPS: %.1f", app->RENDER_CURRENT_FPS);
         ImGui::End();
     }
 
@@ -116,6 +116,7 @@ void UI::setupImGUI()
     init_info.MinImageCount = 2;
     init_info.ImageCount = p_renderer->d_swap_chain_images.size();
     init_info.CheckVkResultFn = check_vk_result;
+    init_info.MSAASamples = app->RENDER_ENABLE_MSAA ? p_renderer->d_msaa_sample_count : VK_SAMPLE_COUNT_1_BIT;
     ImGui_ImplVulkan_Init(&init_info, p_renderer->d_render_pass);
     {
         VkCommandBuffer commandBuffer = p_renderer->startSingleCommand();

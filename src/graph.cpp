@@ -174,6 +174,8 @@ void Graph::createUniformBuffers()
     	}
 	}
 
+	d_node_uniform_buffers_need_update = true;
+
 	if(myLogger){myLogger->AddMessage(myLoggerOwner, "uniform buffers created");}
 }
 
@@ -525,8 +527,6 @@ void Graph::createIndiceBuffers(std::vector<GraphUserInput>& meshes)
 
 void Graph::createRenderCommandBuffers()
 {
-    LOGGING::Logger* myLogger = app->GetLogger();
-    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_GRAPH;
 	UTILS::UI* myUI = app->GetUI();
 
     size_t swapChainImagesCount = app->GetRenderer()->getSwapChainImagesCount();
@@ -603,6 +603,83 @@ void Graph::createRenderCommandBuffers()
 		if (vkEndCommandBuffer(d_commands[i]) != VK_SUCCESS)
 			throw std::runtime_error("ERROR: failed to record Vulkan render command buffer!");
 	}
+}
+
+void Graph::updateRenderCommandBuffer(uint32_t imageID)
+{
+	if(imageID < 0 || imageID >= d_commands.size())
+		throw std::runtime_error("ERROR: failed to update Vulkan command buffer, wrong image ID");
+
+	UTILS::UI* myUI = app->GetUI();
+
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0;
+	beginInfo.pInheritanceInfo = nullptr;
+	if (vkBeginCommandBuffer(d_commands[imageID], &beginInfo) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to begin recording Vulkan command buffer!");
+
+	VkRenderPassBeginInfo renderPassInfo{};
+	app->GetRenderer()->fillRenderPassInfo(renderPassInfo, imageID);
+
+	std::vector<VkClearValue> clearValues{};
+	clearValues.resize(1);
+	clearValues[0].color = {
+		app->RENDER_CLEAR_VALUES[0], app->RENDER_CLEAR_VALUES[1],
+		app->RENDER_CLEAR_VALUES[2], app->RENDER_CLEAR_VALUES[3]
+	};
+	if(app->RENDER_ENABLE_MSAA)
+	{
+		clearValues.resize(clearValues.size()+1);
+		clearValues[clearValues.size()-1].color = {
+			app->RENDER_CLEAR_VALUES[0], app->RENDER_CLEAR_VALUES[1],
+			app->RENDER_CLEAR_VALUES[2], app->RENDER_CLEAR_VALUES[3]
+		};
+	}
+	if(app->RENDER_ENABLE_DEPTH)
+	{
+		clearValues.resize(clearValues.size()+1);
+		clearValues[clearValues.size()-1].depthStencil = {1.0f, 0};
+	}
+	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+	renderPassInfo.pClearValues = clearValues.data();
+
+	vkCmdBeginRenderPass(d_commands[imageID], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	VkPipelineLayout pipelineLayout = app->GetRenderer()->getGraphicsPipelineLayout();
+	vkCmdBindPipeline(d_commands[imageID], VK_PIPELINE_BIND_POINT_GRAPHICS, app->GetRenderer()->getGraphicsPipeline());
+
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(d_commands[imageID], 0, 1, &d_vertex_buffer.buf, offsets);
+
+	if(d_indice_count)
+		vkCmdBindIndexBuffer(d_commands[imageID], d_indice_buffer.buf, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdBindDescriptorSets(d_commands[imageID], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &d_descriptor_ubo[imageID], 0, nullptr);
+
+	for(auto& node : d_nodes)
+	{
+		if(!node->meshIDs.size()) continue;
+		for(size_t meshID : node->meshIDs)
+		{
+			Mesh* mesh = d_meshes[meshID];
+			if(mesh->meshID < 0) continue;
+			vkCmdBindDescriptorSets(d_commands[imageID], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
+				&d_descriptor_per_mesh[mesh->meshID][imageID], 0, nullptr);
+			vkCmdPushConstants(d_commands[imageID], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+				sizeof(MeshConstantData), &d_mesh_constants[meshID]);
+			if(mesh->indiceCount > 0)
+				vkCmdDrawIndexed(d_commands[imageID], mesh->indiceCount, 1, mesh->indiceStart, 0, 0);
+			else
+				vkCmdDraw(d_commands[imageID], mesh->vertexCount, 1, mesh->vertexStart, 0);
+		}
+	}
+
+	if(myUI) ImGui_ImplVulkan_RenderDrawData(myUI->recordUI(), d_commands[imageID]);
+
+	vkCmdEndRenderPass(d_commands[imageID]);
+	if (vkEndCommandBuffer(d_commands[imageID]) != VK_SUCCESS)
+		throw std::runtime_error("ERROR: failed to record Vulkan render command buffer!");
 }
 
 void Graph::createTexturesFromPaths(const std::set<std::string> paths)
@@ -924,10 +1001,12 @@ void Graph::onFrameSizeChangeStart()
 		for(auto& buffer : buffers)
 			buffer.destroy(d_device);
 	}
+	app->GetRenderer()->freeRenderCommandBuffers(d_commands);
 }
 
 void Graph::onFrameSizeChangeEnd()
 {
 	createUniformBuffers();
     createDescriptorSets();
+	createRenderCommandBuffers();
 }

@@ -12,7 +12,7 @@ extern Application* app;
 #include <chrono>
 #include <thread>
 
-void limitFPS(double& prev, double& now, double MAX_SPF);
+double limitFPS(double& prev, double& now, double MAX_SPF);
 
 using namespace BASE;
 
@@ -55,16 +55,14 @@ void Renderer::loop(USER_UPDATE user_func)
     p_graph->createRenderCommandBuffers();
     double tNow = glfwGetTime();
     double tPrev = glfwGetTime();
-    double MAX_SPF = (1.0f * static_cast<double>(d_swap_chain_images.size())) / app->RENDER_MAX_FPS;
+    double MAX_SPF = 1.0f / app->RENDER_MAX_FPS;
     while(!glfwWindowShouldClose(p_backend->p_window))
     {
         glfwPollEvents();
         if(myCamera) myCamera->update(app->CAMERA_SPEED, 0.0f, 0.0f);
         drawFrame(user_func);
-        // TODO: refresh part of the commands to save resources
-        freeRenderCommandBuffers(p_graph->d_commands);
-        p_graph->createRenderCommandBuffers();
-        limitFPS(tNow, tPrev, MAX_SPF);
+        double tDelta = limitFPS(tNow, tPrev, MAX_SPF);
+        app->RENDER_CURRENT_FPS = 1.0f / tDelta;
     }
 
     vkDeviceWaitIdle(p_backend->d_device);
@@ -127,9 +125,11 @@ void Renderer::drawFrame(USER_UPDATE user_func)
 
 	result = vkQueuePresentKHR(p_backend->d_present_queue, &presentInfo);
 
+    bool updateCommands = true;
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || p_backend->d_frame_refreshed)
 	{
 		p_backend->d_frame_refreshed = false;
+        updateCommands = false;
 		recreateSwapChain();
 	}
 	else if (result != VK_SUCCESS)
@@ -138,6 +138,21 @@ void Renderer::drawFrame(USER_UPDATE user_func)
 	vkQueueWaitIdle(p_backend->d_present_queue);
 
 	CURRENT_FRAME = (CURRENT_FRAME + 1) % MAX_FRAMES_IN_FLIGHT;
+
+    // recreate render commands by image idx
+    if(updateCommands)
+    {
+        vkFreeCommandBuffers(p_backend->d_device, d_command_pool, 1, &p_graph->d_commands[imageIndex]);
+        VkCommandBufferAllocateInfo allocInfo{};
+	    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	    allocInfo.commandPool = d_command_pool;
+	    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	    allocInfo.commandBufferCount = 1;
+
+        if (vkAllocateCommandBuffers(p_backend->d_device, &allocInfo, &p_graph->d_commands[imageIndex]) != VK_SUCCESS)
+	    	throw std::runtime_error("ERROR: failed to allocate Vulkan command buffers!");
+        p_graph->updateRenderCommandBuffer(imageIndex);
+    }
 }
 
 Renderer::~Renderer()
@@ -893,44 +908,52 @@ void Renderer::recreateSwapChain()
 
 void Renderer::updateUniformBuffers(USER_UPDATE user_func)
 {
+    void* data;
     for(size_t i = 0; i < d_swap_chain_images.size(); i++)
     {
         user_func(p_graph->d_ubo_data, d_swap_chain_image_extent.width, d_swap_chain_image_extent.height);
 
-        void* data;
         vkMapMemory(p_backend->d_device, p_graph->d_ubo_buffers[i].mem, 0, sizeof(DATA::CameraUniform), 0, &data);
         memcpy(data, &p_graph->d_ubo_data, sizeof(DATA::CameraUniform));
         vkUnmapMemory(p_backend->d_device, p_graph->d_ubo_buffers[i].mem);
 
-        // update each node uniform
-	    for(auto& node : p_graph->d_nodes)
-	    {
-	    	DATA::NodeUniformData uniformData{};
+    }
+    // update each node uniform (only when needed)
+    if(p_graph->d_node_uniform_buffers_need_update)
+    {
+        for(size_t i = 0; i < d_swap_chain_images.size(); i++)
+        {
+	        for(auto& node : p_graph->d_nodes)
+	        {
+	        	DATA::NodeUniformData uniformData{};
 
-	    	glm::mat4 mat = node->transformMat;
-	    	DATA::Node* ptr = node->parentNode;
-	    	while(ptr)
-	    	{
-	    		mat = ptr->transformMat * mat;
-	    		ptr = ptr->parentNode;
-	    	}
-	    	uniformData.localTransformation = mat;
+		        glm::mat4 mat = node->transformMat;
+		        DATA::Node* ptr = node->parentNode;
+		        while(ptr)
+		        {
+		        	mat = ptr->transformMat * mat;
+		        	ptr = ptr->parentNode;
+		        }
+		        uniformData.localTransformation = mat;
 
-            vkMapMemory(p_backend->d_device, p_graph->d_node_uniform_buffers[node->nodeID][i].mem, 0, sizeof(DATA::NodeUniformData), 0, &data);
-            memcpy(data, &uniformData, sizeof(DATA::NodeUniformData));
-            vkUnmapMemory(p_backend->d_device, p_graph->d_node_uniform_buffers[node->nodeID][i].mem);
-	    }
+                vkMapMemory(p_backend->d_device, p_graph->d_node_uniform_buffers[node->nodeID][i].mem, 0, sizeof(DATA::NodeUniformData), 0, &data);
+                memcpy(data, &uniformData, sizeof(DATA::NodeUniformData));
+                vkUnmapMemory(p_backend->d_device, p_graph->d_node_uniform_buffers[node->nodeID][i].mem);
+	        }
+        }
+        p_graph->d_node_uniform_buffers_need_update = false;
     }
 }
 
 
-void limitFPS(double& prev, double& now, double MAX_SPF)
+double limitFPS(double& prev, double& now, double MAX_SPF)
 {
     now = glfwGetTime();
     double delta = now - prev;
     if(delta < MAX_SPF)
     {
-        std::this_thread::sleep_for(std::chrono::duration<double>(MAX_SPF - delta));
+        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long>((MAX_SPF - delta) * 1000)));
     }
     prev = glfwGetTime();
+    return std::max(delta, MAX_SPF);
 }

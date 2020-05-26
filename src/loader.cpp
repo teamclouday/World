@@ -165,7 +165,7 @@ void loadTinyGLTFnodes(tinygltf::Model& model, tinygltf::Node& node, Node* paren
     if(node.scale.size() == 3)
     {
         glm::vec3 scale = glm::make_vec3(node.scale.data());
-        localTransformation = glm::scale(localTransformation, scale);
+        localTransformation = glm::scale(glm::mat4(1.0f), scale) * localTransformation;
     }
     if(node.rotation.size() == 4)
     {
@@ -175,7 +175,7 @@ void loadTinyGLTFnodes(tinygltf::Model& model, tinygltf::Node& node, Node* paren
     if(node.translation.size() == 3)
     {
         glm::vec3 translation = glm::make_vec3(node.translation.data());
-        localTransformation = glm::translate(localTransformation, translation);
+        localTransformation = glm::translate(glm::mat4(1.0f), translation) * localTransformation;
     }
     newNode->transformMat = localTransformation;
 
