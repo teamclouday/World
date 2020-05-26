@@ -87,6 +87,8 @@ namespace BASE
         VkFormat getDeviceSupportedImageFormat(const std::vector<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
         // find physical device memory type
         uint32_t findDeviceMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+        // get max MSAA sample count from physical device
+        VkSampleCountFlagBits getMaxDeviceSampleCount();
 
     public:
         const std::vector<const char*> d_validation_layers = {
@@ -165,6 +167,8 @@ namespace BASE
         void createCommandBuffers();
         // create depth resources
         void createDepthResources();
+        // create MSAA resources
+        void createColorResources();
         // create framebuffers
         void createFramebuffers();
         // create synchronization objects
@@ -177,7 +181,8 @@ namespace BASE
         // select swap chain extent
         VkExtent2D selectSwapChainExtent(VkSurfaceCapabilitiesKHR& capabilities);
         // create image
-        void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+        void createImage(uint32_t width, uint32_t height, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling,
+            VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
         // create image view from image
         VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
         // create shader module from source
@@ -193,31 +198,33 @@ namespace BASE
 
     private:
         Backend* p_backend;
-
+        // swap chain related
         VkSwapchainKHR d_swap_chain;
         std::vector<VkImage> d_swap_chain_images;
         std::vector<VkImageView> d_swap_chain_image_views;
         VkFormat d_swap_chain_image_format;
         VkExtent2D d_swap_chain_image_extent;
         std::vector<VkFramebuffer> d_swap_chain_framebuffers;
-
+        // render pass
         VkRenderPass d_render_pass;
-
+        // pipeline
         VkPipeline d_pipeline;
         VkPipelineLayout d_pipeline_layout;
-
+        // command pool
         VkCommandPool d_command_pool;
-        std::vector<VkCommandBuffer> d_render_commands;
-
+        // synchronization objects
         const size_t MAX_FRAMES_IN_FLIGHT = 2;
         size_t CURRENT_FRAME = 0;
         std::vector<VkSemaphore> d_semaphore_image;
         std::vector<VkSemaphore> d_semaphore_render;
         std::vector<VkFence> d_fence_render;
         std::vector<VkFence> d_fence_image;
-
+        // depth image
         DATA::Image d_depth_image;
-
+        // msaa image
+        VkSampleCountFlagBits d_msaa_sample_count;
+        DATA::Image d_color_image;
+        // data graph
         DATA::Graph* p_graph;
     };
 

@@ -19,8 +19,11 @@ Renderer::Renderer()
         throw std::runtime_error("ERROR: backend not initialized when using renderer!");
     createCommandPool();
     createSwapChain();
+    if(app->RENDER_ENABLE_MSAA)
+        createColorResources();
+    if(app->RENDER_ENABLE_DEPTH)
+        createDepthResources();
     createRenderPass();
-    createDepthResources();
     createSyncObjects();
 }
 
@@ -204,24 +207,40 @@ void Renderer::createRenderPass()
 
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = d_swap_chain_image_format;
-    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.samples = (app->RENDER_ENABLE_MSAA) ? d_msaa_sample_count : VK_SAMPLE_COUNT_1_BIT;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    colorAttachment.finalLayout = (app->RENDER_ENABLE_MSAA) ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentDescription depthAttachment{};
-    depthAttachment.format = p_backend->getDeviceSupportedImageFormat({VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-                                            VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    if(app->RENDER_ENABLE_DEPTH)
+    {
+        depthAttachment.format = p_backend->getDeviceSupportedImageFormat({VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+                                                VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+        depthAttachment.samples = (app->RENDER_ENABLE_MSAA) ? d_msaa_sample_count : VK_SAMPLE_COUNT_1_BIT;
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+
+    VkAttachmentDescription colorAttachmentResolve{};
+    if(app->RENDER_ENABLE_MSAA)
+    {
+        colorAttachmentResolve.format = d_swap_chain_image_format;
+        colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+        colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    }
 
     VkAttachmentReference colorAttachmentRef{};
 	colorAttachmentRef.attachment = 0;
@@ -231,13 +250,20 @@ void Renderer::createRenderPass()
 	depthAttachmentRef.attachment = 1;
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+    VkAttachmentReference colorAttachmentResolveRef{};
+    colorAttachmentResolveRef.attachment = 2;
+    colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
 	VkSubpassDescription subpass{};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentRef;
-	subpass.pDepthStencilAttachment = &depthAttachmentRef;
+	subpass.pDepthStencilAttachment = (app->RENDER_ENABLE_DEPTH) ? &depthAttachmentRef : nullptr;
+    subpass.pResolveAttachments = (app->RENDER_ENABLE_MSAA) ? &colorAttachmentResolveRef : nullptr;
 
-	std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+	std::vector<VkAttachmentDescription> attachments = { colorAttachment };
+    if(app->RENDER_ENABLE_DEPTH) attachments.push_back(depthAttachment);
+    if(app->RENDER_ENABLE_MSAA) attachments.push_back(colorAttachmentResolve);
 
 	VkRenderPassCreateInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -361,8 +387,8 @@ void Renderer::createGraphicsPipeline()
     VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	multisampling.minSampleShading = 1.0f;
+	multisampling.rasterizationSamples = (app->RENDER_ENABLE_MSAA) ? d_msaa_sample_count : VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = (app->RENDER_ENABLE_MSAA) ? 0.5f : 1.0f;
 	multisampling.pSampleMask = nullptr;
 	multisampling.alphaToCoverageEnable = VK_FALSE;
 	multisampling.alphaToOneEnable = VK_FALSE;
@@ -389,14 +415,17 @@ void Renderer::createGraphicsPipeline()
 	colorBlending.blendConstants[3] = 0.0f;
 
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
-	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.minDepthBounds = 0.0f;
-	depthStencil.maxDepthBounds = 1.0f;
-	depthStencil.stencilTestEnable = VK_FALSE;
+    if(app->RENDER_ENABLE_DEPTH)
+    {
+	    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	    depthStencil.depthTestEnable = VK_TRUE;
+	    depthStencil.depthWriteEnable = VK_TRUE;
+	    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	    depthStencil.depthBoundsTestEnable = VK_FALSE;
+	    depthStencil.minDepthBounds = 0.0f;
+	    depthStencil.maxDepthBounds = 1.0f;
+	    depthStencil.stencilTestEnable = VK_FALSE;
+    }
 
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -423,7 +452,7 @@ void Renderer::createGraphicsPipeline()
 	pipelineInfo.pViewportState = &viewportState;
 	pipelineInfo.pRasterizationState = &rasterizer;
 	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pDepthStencilState = &depthStencil;
+	pipelineInfo.pDepthStencilState = (app->RENDER_ENABLE_DEPTH) ? &depthStencil : nullptr;
 	pipelineInfo.pColorBlendState = &colorBlending;
 	pipelineInfo.pDynamicState = nullptr;
 	pipelineInfo.layout = d_pipeline_layout;
@@ -459,6 +488,7 @@ void Renderer::createCommandPool()
 
 void Renderer::createDepthResources()
 {
+    if(!app->RENDER_ENABLE_DEPTH) return;
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
 
@@ -466,13 +496,30 @@ void Renderer::createDepthResources()
         {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
         VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
     );
-    createImage(d_swap_chain_image_extent.width, d_swap_chain_image_extent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        d_depth_image.image, d_depth_image.mem);
+    createImage(d_swap_chain_image_extent.width, d_swap_chain_image_extent.height, (app->RENDER_ENABLE_MSAA) ? d_msaa_sample_count : VK_SAMPLE_COUNT_1_BIT,
+        depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, d_depth_image.image, d_depth_image.mem);
     d_depth_image.view = createImageView(d_depth_image.image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
     transitionImageLayout(d_depth_image.image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     d_depth_image.allset = true;
     if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan depth resources created");}
+}
+
+void Renderer::createColorResources()
+{
+    if(!app->RENDER_ENABLE_MSAA) return;
+    LOGGING::Logger* myLogger = app->GetLogger();
+    LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
+
+    d_msaa_sample_count = p_backend->getMaxDeviceSampleCount();
+
+    VkFormat colorFormat = d_swap_chain_image_format;
+    createImage(d_swap_chain_image_extent.width, d_swap_chain_image_extent.height, d_msaa_sample_count, colorFormat, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        d_color_image.image, d_color_image.mem);
+    d_color_image.view = createImageView(d_color_image.image, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    if(myLogger){myLogger->AddMessage(myLoggerOwner, "Vulkan color resources created");}
 }
 
 void Renderer::createFramebuffers()
@@ -483,10 +530,10 @@ void Renderer::createFramebuffers()
     d_swap_chain_framebuffers.resize(d_swap_chain_images.size());
     for(size_t i = 0; i < d_swap_chain_images.size(); i++)
     {
-        std::array<VkImageView, 2> attachments = {
-            d_swap_chain_image_views[i],
-            d_depth_image.view
-        };
+        std::vector<VkImageView> attachments;
+        if(app->RENDER_ENABLE_MSAA) attachments.push_back(d_color_image.view);
+        if(app->RENDER_ENABLE_DEPTH) attachments.push_back(d_depth_image.view);
+        attachments.push_back(d_swap_chain_image_views[i]);
         VkFramebufferCreateInfo framebufferInfo{};
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferInfo.renderPass = d_render_pass;
@@ -566,7 +613,8 @@ VkExtent2D Renderer::selectSwapChainExtent(VkSurfaceCapabilitiesKHR& capabilitie
     }
 }
 
-void Renderer::createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+void Renderer::createImage(uint32_t width, uint32_t height, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling,
+    VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
 {
     VkImageCreateInfo imageInfo{};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -581,7 +629,7 @@ void Renderer::createImage(uint32_t width, uint32_t height, VkFormat format, VkI
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageInfo.usage = usage;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.samples = numSamples;
 	imageInfo.flags = 0;
 
 	if (vkCreateImage(p_backend->d_device, &imageInfo, nullptr, &image) != VK_SUCCESS)
@@ -769,7 +817,11 @@ void Renderer::destroySwapChain()
     LOGGING::Logger* myLogger = app->GetLogger();
     LOGGING::LogOwners myLoggerOwner = LOGGING::LOG_OWNERS_RENDERER;
 
-    d_depth_image.destroy(p_backend->d_device);
+    if(app->RENDER_ENABLE_MSAA)
+        d_color_image.destroy(p_backend->d_device);
+
+    if(app->RENDER_ENABLE_DEPTH)
+        d_depth_image.destroy(p_backend->d_device);
 
     for(size_t i = 0; i < d_swap_chain_framebuffers.size(); i++)
         vkDestroyFramebuffer(p_backend->d_device, d_swap_chain_framebuffers[i], nullptr);
@@ -803,9 +855,12 @@ void Renderer::recreateSwapChain()
 	destroySwapChain();
 
 	createSwapChain();
+    if(app->RENDER_ENABLE_MSAA)
+        createColorResources();
+    if(app->RENDER_ENABLE_DEPTH)
+	    createDepthResources();
 	createRenderPass();
 	createGraphicsPipeline();
-	createDepthResources();
 	createFramebuffers();
 
     p_graph->onFrameSizeChangeEnd();

@@ -542,12 +542,17 @@ void Graph::createRenderCommandBuffers()
 		VkRenderPassBeginInfo renderPassInfo{};
 		app->GetRenderer()->fillRenderPassInfo(renderPassInfo, i);
 
-		std::array<VkClearValue, 2> clearValues{};
+		std::vector<VkClearValue> clearValues{};
+		clearValues.resize(1);
 		clearValues[0].color = {
 			app->RENDER_CLEAR_VALUES[0], app->RENDER_CLEAR_VALUES[1],
-			app->RENDER_CLEAR_VALUES[2], app->RENDER_CLEAR_VALUES[3],
+			app->RENDER_CLEAR_VALUES[2], app->RENDER_CLEAR_VALUES[3]
 		};
-		clearValues[1].depthStencil = { 1.0f, 0 };
+		if(app->RENDER_ENABLE_DEPTH)
+		{
+			clearValues.resize(clearValues.size()+1);
+			clearValues[clearValues.size()-1].depthStencil = {1.0f, 0};
+		}
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		renderPassInfo.pClearValues = clearValues.data();
 

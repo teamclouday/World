@@ -44,8 +44,8 @@ int main()
 		{{-0.5f,  0.5f, 1.0f}, {},    {},     {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
     };
     std::vector<uint32_t> indices = {
-        0, 1, 2, 2, 3, 0,
         4, 5, 6, 6, 7, 4,
+        0, 1, 2, 2, 3, 0,
     };
     std::string texture = "resources/vulkan.png";
     app->GRAPH_MESHES = {
@@ -55,13 +55,15 @@ int main()
 
     // set renderer variables
     app->RENDER_CLEAR_VALUES = {0.1f, 0.1f, 0.1f, 1.0f};
+    app->RENDER_ENABLE_DEPTH = true;
+    app->RENDER_ENABLE_MSAA = true;
     // set camera variables
     app->CAMERA_INIT_POS = glm::vec3(0.0f, 0.0f, 10.0f);
     app->CAMERA_ZOOM_SCALE = 0.01f;
     app->CAMERA_SPEED = 1.0f;
     app->StartCamera();
 
-    app->GRAPH_MODEL_PATH = "resources/wasteland_sword/scene.gltf";
+    app->GRAPH_MODEL_PATH = "resources/DamagedHelmet.gltf";
 
     try
     {

@@ -340,6 +340,7 @@ void Backend::createLogicalDevice()
 
     VkPhysicalDeviceFeatures deviceFeatures{};
     deviceFeatures.samplerAnisotropy = VK_TRUE;
+    deviceFeatures.sampleRateShading = (app->RENDER_ENABLE_MSAA) ? VK_TRUE : VK_FALSE;
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -572,4 +573,20 @@ uint32_t Backend::findDeviceMemoryType(uint32_t typeFilter, VkMemoryPropertyFlag
 	}
 
 	throw std::runtime_error("ERROR: failed to find suitable Vulkan device memory type!");
+}
+
+VkSampleCountFlagBits Backend::getMaxDeviceSampleCount()
+{
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(d_physical_device, &properties);
+
+    VkSampleCountFlags counts = properties.limits.framebufferColorSampleCounts & properties.limits.framebufferDepthSampleCounts;
+    if(counts & VK_SAMPLE_COUNT_64_BIT) {return VK_SAMPLE_COUNT_64_BIT;}
+    if(counts & VK_SAMPLE_COUNT_32_BIT) {return VK_SAMPLE_COUNT_32_BIT;}
+    if(counts & VK_SAMPLE_COUNT_16_BIT) {return VK_SAMPLE_COUNT_16_BIT;}
+    if(counts & VK_SAMPLE_COUNT_8_BIT) {return VK_SAMPLE_COUNT_8_BIT;}
+    if(counts & VK_SAMPLE_COUNT_4_BIT) {return VK_SAMPLE_COUNT_4_BIT;}
+    if(counts & VK_SAMPLE_COUNT_2_BIT) {return VK_SAMPLE_COUNT_2_BIT;}
+
+    return VK_SAMPLE_COUNT_1_BIT;
 }
