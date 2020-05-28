@@ -64,7 +64,7 @@ int main()
     app->CAMERA_SPEED = 10.0f;
     app->StartCamera();
 
-    app->GRAPH_MODEL_PATH = "resources/littlest_tokyo/scene.gltf";
+    app->GRAPH_MODEL_PATH = "resources/wasteland_sword/scene.gltf";
 
     try
     {
@@ -81,6 +81,6 @@ int main()
     }
 
     delete app;
-    
+
     return ret;
 }

@@ -115,6 +115,7 @@ static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int act
             if(myCamera->focus) myCamera->keyMap[2] = true;
         if(key == GLFW_KEY_D || key == GLFW_KEY_RIGHT)
             if(myCamera->focus) myCamera->keyMap[3] = true;
+        myCamera->update(app->CAMERA_SPEED, 0, 0);
     }
     if(action == GLFW_RELEASE)
     {

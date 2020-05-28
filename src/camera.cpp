@@ -48,21 +48,24 @@ void Camera::update(float deltaT, float xoffset, float yoffset)
 
     if(xoffset || yoffset)
         this->ProcessMouseMovement(xoffset, yoffset);
+    else
+    {
+        if(this->keyMap[0])
+            this->ProcessKeyboard(FORWARD, deltaT);
+        if(this->keyMap[1])
+            this->ProcessKeyboard(LEFT, deltaT);
+        if(this->keyMap[2])
+            this->ProcessKeyboard(BACKWARD, deltaT);
+        if(this->keyMap[3])
+            this->ProcessKeyboard(RIGHT, deltaT);
+    }
 
-    if(this->keyMap[0])
-        this->ProcessKeyboard(FORWARD, deltaT);
-    if(this->keyMap[1])
-        this->ProcessKeyboard(LEFT, deltaT);
-    if(this->keyMap[2])
-        this->ProcessKeyboard(BACKWARD, deltaT);
-    if(this->keyMap[3])
-        this->ProcessKeyboard(RIGHT, deltaT);
-    if(this->keyMap[4])
-        this->mv_zoom += 0.005f;
-    if(this->keyMap[5])
-        this->mv_zoom -= 0.005f;
-    this->mv_zoom = mv_zoom > 0.0f ? mv_zoom : 0.001f;
-    this->mv_zoom = mv_zoom < 5.0f ? mv_zoom : 5.0f;
+    // if(this->keyMap[4])
+    //     this->mv_zoom += 0.005f;
+    // if(this->keyMap[5])
+    //     this->mv_zoom -= 0.005f;
+    // this->mv_zoom = mv_zoom > 0.0f ? mv_zoom : 0.001f;
+    // this->mv_zoom = mv_zoom < 5.0f ? mv_zoom : 5.0f;
 }
 
 void Camera::ProcessKeyboard(Camera_Movement direction, GLfloat deltaTime)
