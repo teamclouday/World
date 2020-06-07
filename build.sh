@@ -19,7 +19,7 @@ echo Current Build Type is "${buildtype}"
 cmake -DCMAKE_BUILD_TYPE=${buildtype} ..
 echo Cmake File Generated
 echo Building
-cmake --build .
+cmake --build . --config ${buildtype}
 cd ..
 echo Compiling All Shaders
 cd shaders

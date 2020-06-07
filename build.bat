@@ -19,7 +19,7 @@ ECHO Current Build Type is %buildtype%
 cmake -A Win32 -DCMAKE_BUILD_TYPE=%buildtype% ..
 ECHO Cmake File Generated
 ECHO Building
-cmake --build .
+cmake --build . --config %buildtype%
 CD ..
 ECHO Compiling All Shaders
 CD shaders
